@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-datamanagementd secret-scan
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test
 
 # 一键编译前后端
 build: build-backend build-frontend
@@ -30,3 +30,19 @@ test-datamanagementd:
 
 secret-scan:
 	@python3 tools/secret_scan.py
+
+oauth-local-server:
+	@cd backend && go run ./cmd/openai-oauth-client server --listen 127.0.0.1:38080
+
+oauth-local-healthcheck:
+	@curl -s http://127.0.0.1:38080/healthz
+
+oauth-local-chat-test:
+	@curl -s http://127.0.0.1:38080/v1/chat/completions \
+		-H 'Content-Type: application/json' \
+		-d '{"model":"gpt-5.4","messages":[{"role":"system","content":"act as assistant"},{"role":"user","content":"say hello in 5 words"}],"stream":false}'
+
+oauth-local-chat-stream-test:
+	@curl -N http://127.0.0.1:38080/v1/chat/completions \
+		-H 'Content-Type: application/json' \
+		-d '{"model":"gpt-5.4","messages":[{"role":"system","content":"act as assistant"},{"role":"user","content":"say hello in 5 words"}],"stream":true,"stream_options":{"include_usage":true}}'
