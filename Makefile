@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-healthcheck openai-routing-chat-test
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static
 
 FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
@@ -67,6 +67,19 @@ openai-routing-service-local:
 	SERVER_MODE=debug \
 	TOTP_ENCRYPTION_KEY=$${TOTP_ENCRYPTION_KEY} \
 	OPENAI_COMPAT_SERVICE_ENABLED=true \
+	OPENAI_COMPAT_SERVICE_AUTH_MODE=api_key \
+	OPENAI_COMPAT_SERVICE_PATH_PREFIX=/openai-routing \
+	OPENAI_COMPAT_SERVICE_DEFAULT_REASONING_EFFORT=low \
+	go run ./cmd/server
+
+openai-routing-service-local-static:
+	@test -f .openai-routing-service/dev.env || (echo ".openai-routing-service/dev.env not found, run 'make openai-routing-provision-local' first" >&2; exit 1)
+	@set -a; . ./.openai-routing-service/dev.env; set +a; \
+	cd backend && \
+	LOG_LEVEL=debug \
+	SERVER_MODE=debug \
+	TOTP_ENCRYPTION_KEY=$${TOTP_ENCRYPTION_KEY} \
+	OPENAI_COMPAT_SERVICE_ENABLED=true \
 	OPENAI_COMPAT_SERVICE_AUTH_MODE=static_key \
 	OPENAI_COMPAT_SERVICE_STATIC_KEY=$${OPENAI_COMPAT_STATIC_KEY} \
 	OPENAI_COMPAT_SERVICE_SERVICE_API_KEY=$${OPENAI_COMPAT_SERVICE_API_KEY} \
@@ -74,10 +87,35 @@ openai-routing-service-local:
 	OPENAI_COMPAT_SERVICE_DEFAULT_REASONING_EFFORT=low \
 	go run ./cmd/server
 
+openai-routing-ui-build:
+	@if [ ! -d frontend/node_modules ]; then pnpm --dir frontend install; fi
+	@pnpm --dir frontend build
+
+openai-routing-ui-local:
+	@test -f .openai-routing-service/dev.env || (echo ".openai-routing-service/dev.env not found, run 'make openai-routing-provision-local' first" >&2; exit 1)
+	@$(MAKE) openai-routing-ui-build
+	@set -a; . ./.openai-routing-service/dev.env; set +a; \
+	cd backend && \
+	LOG_LEVEL=debug \
+	SERVER_MODE=debug \
+	TOTP_ENCRYPTION_KEY=$${TOTP_ENCRYPTION_KEY} \
+	OPENAI_COMPAT_SERVICE_ENABLED=true \
+	OPENAI_COMPAT_SERVICE_AUTH_MODE=api_key \
+	OPENAI_COMPAT_SERVICE_PATH_PREFIX=/openai-routing \
+	OPENAI_COMPAT_SERVICE_DEFAULT_REASONING_EFFORT=low \
+	go run -tags embed ./cmd/server
+
 openai-routing-healthcheck:
 	@curl -s http://127.0.0.1:8080/openai-routing/healthz
 
 openai-routing-chat-test:
+	@test -n "$$OPENAI_ROUTING_UI_API_KEY" || (echo "OPENAI_ROUTING_UI_API_KEY is required" >&2; exit 1)
+	@curl -s http://127.0.0.1:8080/openai-routing/v1/chat/completions \
+		-H "Authorization: Bearer $$OPENAI_ROUTING_UI_API_KEY" \
+		-H 'Content-Type: application/json' \
+		-d '{"model":"gpt-5.4","messages":[{"role":"system","content":"act as assistant"},{"role":"user","content":"say hello in 5 words"}],"stream":false}'
+
+openai-routing-chat-test-static:
 	@test -f .openai-routing-service/dev.env || (echo ".openai-routing-service/dev.env not found, run 'make openai-routing-provision-local' first" >&2; exit 1)
 	@set -a; . ./.openai-routing-service/dev.env; set +a; \
 	curl -s http://127.0.0.1:8080/openai-routing/v1/chat/completions \

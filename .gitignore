@@ -33,6 +33,7 @@ backend/.gocache/
 # ===================
 node_modules/
 frontend/node_modules/
+frontend/.pnpm-store/
 frontend/dist/
 *.local
 *.tsbuildinfo
@@ -144,6 +145,7 @@ docs/*
 deploy/routing_postgres_data/
 deploy/routing_redis_data/
 backend/openai-oauth-client
+backend/internal/web/dist/
 frontend/coverage/
 aicodex
 output/

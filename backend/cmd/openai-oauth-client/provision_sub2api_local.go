@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -31,6 +32,8 @@ const (
 	defaultProvisionRedisDB          = 0
 	defaultProvisionAdminEmail       = "admin@sub2api.local"
 	defaultProvisionAdminPassword    = "sub2api-admin-local"
+	defaultProvisionAdminUsername    = "admin"
+	defaultProvisionAdminBalance     = 1000000
 	defaultProvisionServerHost       = "127.0.0.1"
 	defaultProvisionServerPort       = 8080
 	defaultProvisionServiceUserEmail = "openai-routing-service@local.invalid"
@@ -150,6 +153,10 @@ func runProvisionSub2APILocal(ctx context.Context, args []string) error {
 	apiKeyRepo := repository.NewAPIKeyRepository(entClient, sqlDB)
 	accountRepo := repository.NewAccountRepository(entClient, sqlDB, nil)
 
+	adminUser, err := ensureProvisionAdminUser(ctx, userRepo, *adminEmail, *adminPassword)
+	if err != nil {
+		return err
+	}
 	group, err := ensureProvisionGroup(ctx, groupRepo, *groupName)
 	if err != nil {
 		return err
@@ -166,16 +173,22 @@ func runProvisionSub2APILocal(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeProvisionEnvFile(devEnvPath, dataDirAbs, serviceAPIKey, *staticKey, totpKey); err != nil {
+	if err := clearProvisionRedisCaches(ctx, cfg); err != nil {
+		return fmt.Errorf("clear local redis caches: %w", err)
+	}
+	if err := writeProvisionEnvFile(devEnvPath, dataDirAbs, serviceAPIKey, *staticKey, totpKey, *adminEmail, *adminPassword, group.Name); err != nil {
 		return err
 	}
 
 	fmt.Fprintf(os.Stderr, "Provisioned local sub2api routing resources in %s\n", dataDirAbs)
+	fmt.Fprintf(os.Stderr, "admin_user_id=%d admin_user_balance=%.2f\n", adminUser.ID, adminUser.Balance)
 	fmt.Fprintf(os.Stderr, "group_id=%d group_name=%s\n", group.ID, group.Name)
 	fmt.Fprintf(os.Stderr, "service_user_id=%d service_user_email=%s\n", user.ID, user.Email)
 	fmt.Fprintf(os.Stderr, "account_id=%d account_name=%s\n", account.ID, account.Name)
 	fmt.Fprintf(os.Stderr, "service_api_key=%s\n", serviceAPIKey)
 	fmt.Fprintf(os.Stderr, "static_key=%s\n", *staticKey)
+	fmt.Fprintf(os.Stderr, "admin_email=%s\n", *adminEmail)
+	fmt.Fprintf(os.Stderr, "admin_password=%s\n", *adminPassword)
 	fmt.Fprintf(os.Stderr, "env_file=%s\n", filepath.Join(dataDirAbs, "dev.env"))
 	return nil
 }
@@ -183,6 +196,60 @@ func runProvisionSub2APILocal(ctx context.Context, args []string) error {
 func defaultProvisionDataDirPath() string {
 	root := detectProjectRoot()
 	return filepath.Join(root, defaultProvisionDataDir)
+}
+
+func ensureProvisionAdminUser(ctx context.Context, repo service.UserRepository, email, password string) (*service.User, error) {
+	user, err := repo.GetByEmail(ctx, email)
+	if err == nil && user != nil {
+		updated := false
+		if strings.TrimSpace(user.Role) != service.RoleAdmin {
+			user.Role = service.RoleAdmin
+			updated = true
+		}
+		if strings.TrimSpace(user.Status) != service.StatusActive {
+			user.Status = service.StatusActive
+			updated = true
+		}
+		if strings.TrimSpace(user.Username) == "" {
+			user.Username = defaultProvisionAdminUsername
+			updated = true
+		}
+		if user.Balance < defaultProvisionAdminBalance {
+			user.Balance = defaultProvisionAdminBalance
+			updated = true
+		}
+		if user.Concurrency < defaultProvisionConcurrency {
+			user.Concurrency = defaultProvisionConcurrency
+			updated = true
+		}
+		if updated {
+			if err := repo.Update(ctx, user); err != nil {
+				return nil, err
+			}
+		}
+		return user, nil
+	}
+	if !errors.Is(err, service.ErrUserNotFound) {
+		return nil, err
+	}
+
+	user = &service.User{
+		Email:       email,
+		Username:    defaultProvisionAdminUsername,
+		Role:        service.RoleAdmin,
+		Status:      service.StatusActive,
+		Balance:     defaultProvisionAdminBalance,
+		Concurrency: defaultProvisionConcurrency,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := user.SetPassword(password); err != nil {
+		return nil, err
+	}
+	if err := repo.Create(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 func ensureProvisionGroup(ctx context.Context, repo service.GroupRepository, name string) (*service.Group, error) {
@@ -361,15 +428,60 @@ func buildProvisionAccountName(state *savedState) string {
 	return "OpenAI Routing OAuth Account"
 }
 
-func writeProvisionEnvFile(path string, dataDir string, serviceAPIKey string, staticKey string, totpKey string) error {
+func writeProvisionEnvFile(path string, dataDir string, serviceAPIKey string, staticKey string, totpKey string, adminEmail string, adminPassword string, groupName string) error {
 	content := strings.Join([]string{
 		"DATA_DIR=" + dataDir,
 		"OPENAI_COMPAT_SERVICE_API_KEY=" + serviceAPIKey,
 		"OPENAI_COMPAT_STATIC_KEY=" + staticKey,
 		"TOTP_ENCRYPTION_KEY=" + totpKey,
+		"SUB2API_ADMIN_EMAIL=" + adminEmail,
+		"SUB2API_ADMIN_PASSWORD=" + adminPassword,
+		"OPENAI_ROUTING_GROUP_NAME=" + groupName,
 		"",
 	}, "\n")
 	return os.WriteFile(path, []byte(content), 0o600)
+}
+
+func clearProvisionRedisCaches(ctx context.Context, cfg *config.Config) error {
+	if cfg == nil {
+		return nil
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr:     cfg.Redis.Address(),
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+	defer func() { _ = client.Close() }()
+
+	patterns := []string{
+		"apikey:auth:*",
+		"billing:balance:*",
+	}
+	for _, pattern := range patterns {
+		if err := deleteRedisKeysByPattern(ctx, client, pattern); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deleteRedisKeysByPattern(ctx context.Context, client *redis.Client, pattern string) error {
+	var cursor uint64
+	for {
+		keys, nextCursor, err := client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			if err := client.Del(ctx, keys...).Err(); err != nil {
+				return err
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			return nil
+		}
+	}
 }
 
 func parseEnvValue(path string, key string) string {
