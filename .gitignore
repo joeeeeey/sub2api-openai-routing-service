@@ -119,6 +119,9 @@ tests
 CLAUDE.md
 .claude
 scripts
+!scripts/
+scripts/*
+!scripts/openai-oauth-client.sh
 .code-review-state
 #openspec/
 code-reviews/
@@ -131,8 +134,10 @@ docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
+!docs/PRD_OPENAI_OAUTH_LOCAL_SERVER.md
 .serena/
 .codex/
+.openai-oauth-client/
 frontend/coverage/
 aicodex
 output/
