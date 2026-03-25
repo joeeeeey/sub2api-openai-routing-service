@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: sub2api-openai-routing-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${OPENAI_ROUTING_PG_PORT:-15432}:5432"
+    volumes:
+      - ./routing_postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${OPENAI_ROUTING_POSTGRES_USER:-sub2api}
+      - POSTGRES_PASSWORD=${OPENAI_ROUTING_POSTGRES_PASSWORD:-sub2api_local_dev}
+      - POSTGRES_DB=${OPENAI_ROUTING_POSTGRES_DB:-sub2api}
+      - PGDATA=/var/lib/postgresql/data
+      - TZ=${TZ:-Asia/Shanghai}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OPENAI_ROUTING_POSTGRES_USER:-sub2api} -d ${OPENAI_ROUTING_POSTGRES_DB:-sub2api}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    container_name: sub2api-openai-routing-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${OPENAI_ROUTING_REDIS_PORT:-16379}:6379"
+    volumes:
+      - ./routing_redis_data:/data
+    command: >
+      sh -c '
+        redis-server
+        --save 60 1
+        --appendonly yes
+        --appendfsync everysec
+        ${OPENAI_ROUTING_REDIS_PASSWORD:+--requirepass "$OPENAI_ROUTING_REDIS_PASSWORD"}'
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - REDISCLI_AUTH=${OPENAI_ROUTING_REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s

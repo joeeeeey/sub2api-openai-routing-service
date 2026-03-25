@@ -63,6 +63,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
+	reasoningDecision := openAICompatReasoningDecision{}
+	body, reasoningDecision, err = applyOpenAICompatReasoningDefaults(c, body, "chat_completions")
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to normalize reasoning effort")
+		return
+	}
+
 	if !gjson.ValidBytes(body) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
@@ -76,7 +83,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	reqModel := modelResult.String()
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
-	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	reqLog = reqLog.With(
+		zap.String("model", reqModel),
+		zap.Bool("stream", reqStream),
+		zap.String("downstream_reasoning_effort", reasoningDecision.Downstream),
+		zap.String("effective_reasoning_effort", reasoningDecision.Effective),
+		zap.String("reasoning_effort_source", reasoningDecision.Source),
+	)
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))

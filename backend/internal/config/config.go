@@ -80,6 +80,7 @@ type Config struct {
 	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
 	Pricing                 PricingConfig                 `mapstructure:"pricing"`
 	Gateway                 GatewayConfig                 `mapstructure:"gateway"`
+	OpenAICompatService     OpenAICompatServiceConfig     `mapstructure:"openai_compat_service"`
 	APIKeyAuth              APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
 	SubscriptionCache       SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
 	SubscriptionMaintenance SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
@@ -809,6 +810,15 @@ type GatewayOpenAIHTTP2Config struct {
 	FallbackWindowSeconds int `mapstructure:"fallback_window_seconds"`
 	// FallbackTTLSeconds: 触发后回退 HTTP/1.1 的持续时间（秒）
 	FallbackTTLSeconds int `mapstructure:"fallback_ttl_seconds"`
+}
+
+type OpenAICompatServiceConfig struct {
+	Enabled                bool   `mapstructure:"enabled"`
+	PathPrefix             string `mapstructure:"path_prefix"`
+	AuthMode               string `mapstructure:"auth_mode"` // api_key | static_key | none
+	StaticKey              string `mapstructure:"static_key"`
+	ServiceAPIKey          string `mapstructure:"service_api_key"`
+	DefaultReasoningEffort string `mapstructure:"default_reasoning_effort"`
 }
 
 // UserMessageQueueConfig 用户消息串行队列配置
@@ -1901,6 +1911,14 @@ func setDefaults() {
 	viper.SetDefault("gateway.user_message_queue.max_delay_ms", 2000)
 	viper.SetDefault("gateway.user_message_queue.cleanup_interval_seconds", 60)
 
+	// OpenAI compat routing service
+	viper.SetDefault("openai_compat_service.enabled", false)
+	viper.SetDefault("openai_compat_service.path_prefix", "/openai-routing")
+	viper.SetDefault("openai_compat_service.auth_mode", "static_key")
+	viper.SetDefault("openai_compat_service.static_key", "")
+	viper.SetDefault("openai_compat_service.service_api_key", "")
+	viper.SetDefault("openai_compat_service.default_reasoning_effort", "low")
+
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	viper.SetDefault("concurrency.ping_interval", 10)
 
@@ -2746,6 +2764,29 @@ func (c *Config) Validate() error {
 	}
 	if err := ValidateDingTalkConfig(c.DingTalk); err != nil {
 		return fmt.Errorf("dingtalk_connect: %w", err)
+	}
+	if c.OpenAICompatService.Enabled {
+		mode := strings.ToLower(strings.TrimSpace(c.OpenAICompatService.AuthMode))
+		switch mode {
+		case "api_key", "static_key", "none":
+		default:
+			return fmt.Errorf("openai_compat_service.auth_mode must be one of: api_key/static_key/none")
+		}
+		if strings.TrimSpace(c.OpenAICompatService.PathPrefix) == "" {
+			return fmt.Errorf("openai_compat_service.path_prefix is required when enabled")
+		}
+		if mode == "static_key" && strings.TrimSpace(c.OpenAICompatService.StaticKey) == "" {
+			return fmt.Errorf("openai_compat_service.static_key is required when auth_mode=static_key")
+		}
+		if mode != "api_key" && strings.TrimSpace(c.OpenAICompatService.ServiceAPIKey) == "" {
+			return fmt.Errorf("openai_compat_service.service_api_key is required when auth_mode is static_key or none")
+		}
+		effort := strings.ToLower(strings.TrimSpace(c.OpenAICompatService.DefaultReasoningEffort))
+		switch effort {
+		case "", "none", "low", "medium", "high":
+		default:
+			return fmt.Errorf("openai_compat_service.default_reasoning_effort must be one of: none/low/medium/high")
+		}
 	}
 	return nil
 }

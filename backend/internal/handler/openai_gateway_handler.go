@@ -156,6 +156,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
+	reasoningDecision := openAICompatReasoningDecision{}
+	body, reasoningDecision, err = applyOpenAICompatReasoningDefaults(c, body, "responses")
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to normalize reasoning effort")
+		return
+	}
+
 	setOpsRequestContext(c, "", false)
 	sessionHashBody := body
 	if service.IsOpenAIResponsesCompactPathForTest(c) {
@@ -192,7 +199,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqStream := streamResult.Bool()
-	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	reqLog = reqLog.With(
+		zap.String("model", reqModel),
+		zap.Bool("stream", reqStream),
+		zap.String("downstream_reasoning_effort", reasoningDecision.Downstream),
+		zap.String("effective_reasoning_effort", reasoningDecision.Effective),
+		zap.String("reasoning_effort_source", reasoningDecision.Source),
+	)
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
 	if previousResponseID != "" {
 		previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)

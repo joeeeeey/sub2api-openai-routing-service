@@ -94,7 +94,8 @@ func ProvideRouter(
 		service.SetWebSearchManager(websearch.NewManager(configs, redisClient))
 	})
 
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
+	openAICompatMiddleware := middleware2.NewOpenAICompatServiceMiddleware(apiKeyService, subscriptionService, cfg)
+	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, openAICompatMiddleware, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器

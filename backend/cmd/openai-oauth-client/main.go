@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
 	openaioauth "github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
@@ -154,6 +155,10 @@ func main() {
 	case "server":
 		if err := runServer(ctx, os.Args[2:]); err != nil {
 			fatalf("server failed: %v", err)
+		}
+	case "provision-sub2api-local":
+		if err := runProvisionSub2APILocal(ctx, os.Args[2:]); err != nil {
+			fatalf("provision-sub2api-local failed: %v", err)
 		}
 	case "show-state":
 		if err := runShowState(os.Args[2:]); err != nil {
@@ -888,6 +893,7 @@ func usageAndExit(code int) {
   openai-oauth-client login [--state-file PATH]
   openai-oauth-client chat --prompt "hello" [--model gpt-5.4] [--thinking-effort low] [--stream=true]
   openai-oauth-client server [--listen 127.0.0.1:38080]
+  openai-oauth-client provision-sub2api-local
   openai-oauth-client show-state
   openai-oauth-client logout
 
@@ -897,9 +903,11 @@ Default state file:
 Examples:
   bash scripts/openai-oauth-client.sh login
   bash scripts/openai-oauth-client.sh server
+  bash scripts/openai-oauth-client.sh provision-sub2api-local
   bash scripts/openai-oauth-client.sh chat --stream=true --prompt "hello" --model gpt-5.4 --thinking-effort low
   go run ./cmd/openai-oauth-client login
   go run ./cmd/openai-oauth-client server
+  go run ./cmd/openai-oauth-client provision-sub2api-local
   go run ./cmd/openai-oauth-client chat --stream=true --prompt "hello" --model gpt-5.4 --thinking-effort low
 `, defaultStateFile())
 	os.Exit(code)

@@ -452,6 +452,40 @@ gateway:
     #     name: "Custom Profile 2"
 
 # =============================================================================
+# OpenAI Compat Routing Service
+# OpenAI 兼容路由服务
+# =============================================================================
+openai_compat_service:
+  # Enable a dedicated OpenAI-compatible REST surface that still reuses sub2api
+  # account management, token refresh, failover, and sticky-session routing.
+  # 启用一个专用的 OpenAI 兼容 REST 接口层，但底层仍复用 sub2api 的
+  # 账号管理、token 刷新、failover 和粘性会话路由。
+  enabled: false
+  # Path prefix for the compat service, e.g. /openai-routing
+  # 兼容服务路径前缀，例如 /openai-routing
+  path_prefix: "/openai-routing"
+  # Auth mode:
+  # - api_key: callers use a normal sub2api API key
+  # - static_key: callers use a fixed external key, service maps it to service_api_key
+  # - none: no external auth, service maps all requests to service_api_key
+  # 鉴权模式：
+  # - api_key: 调用方直接使用现有 sub2api API key
+  # - static_key: 调用方使用固定外部 key，服务端内部映射到 service_api_key
+  # - none: 不做外部鉴权，所有请求内部映射到 service_api_key
+  auth_mode: "static_key"
+  # External static key used only when auth_mode=static_key
+  # 仅在 auth_mode=static_key 时使用的外部静态 key
+  static_key: ""
+  # Real sub2api API key that determines the backing user/group/account pool
+  # for compat traffic. Required for auth_mode=static_key or none.
+  # 兼容服务内部使用的真实 sub2api API key；它决定后端使用哪个用户/分组/账号池。
+  # 在 auth_mode=static_key 或 none 时必填。
+  service_api_key: ""
+  # Default reasoning effort applied when downstream request omits it.
+  # 当下游未显式传递 reasoning effort 时使用的默认值。
+  default_reasoning_effort: "low"
+
+# =============================================================================
 # Logging Configuration
 # 日志配置
 # =============================================================================

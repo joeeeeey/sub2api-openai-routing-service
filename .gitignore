@@ -140,6 +140,10 @@ docs/*
 .serena/
 .codex/
 .openai-oauth-client/
+.openai-routing-service/
+deploy/routing_postgres_data/
+deploy/routing_redis_data/
+backend/openai-oauth-client
 frontend/coverage/
 aicodex
 output/
