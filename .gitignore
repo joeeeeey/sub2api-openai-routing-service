@@ -131,6 +131,8 @@ deploy/docker-compose.override.yml
 vite.config.js
 docs/*
 !docs/PRD_OPENAI_OAUTH_LOCAL_SERVER.md
+!docs/REQUIREMENTS_SUB2API_OPENAI_ROUTING_SERVICE.md
+!docs/SOLUTION_RESEARCH_SUB2API_OPENAI_ROUTING_SERVICE.md
 .serena/
 .codex/
 .openai-oauth-client/
