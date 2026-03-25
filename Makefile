@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static routing-service-image-build routing-service-image-push
 
 FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
@@ -135,3 +135,14 @@ openai-routing-deps-logs:
 
 openai-routing-provision-local:
 	@cd backend && go run ./cmd/openai-oauth-client provision-sub2api-local
+
+routing-service-image-build:
+	@docker buildx build \
+		--platform linux/amd64 \
+		-f Dockerfile.routing-service \
+		-t sub2api-openai-routing-service:local-amd64 \
+		--load \
+		.
+
+routing-service-image-push:
+	@bash deploy/build_push_routing_service_image.sh
