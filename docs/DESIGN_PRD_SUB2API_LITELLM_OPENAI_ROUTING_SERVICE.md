@@ -625,3 +625,11 @@ client
 - `sub2api` 负责账号池、OAuth、路由、usage、UI
 - `LiteLLM` 负责统一入口和 fallback
 - `Azure backup` 只作为失败兜底
+
+## 14. Related Docs
+
+For day-2 operations and long-lived branch maintenance, also see:
+
+- [SOP_SUB2API_OPENAI_ROUTING_SERVICE_MAINTENANCE.md](/Users/joey/repos/my-project/sub2api/docs/SOP_SUB2API_OPENAI_ROUTING_SERVICE_MAINTENANCE.md)
+- [RUNBOOK_INTERVIEWAI_DEV_LITELLM_SUB2API_E2E.md](/Users/joey/repos/my-project/sub2api/docs/RUNBOOK_INTERVIEWAI_DEV_LITELLM_SUB2API_E2E.md)
+- [PRD_SUB2API_OPENAI_ROUTING_SERVICE_DEPLOYMENT.md](/Users/joey/repos/my-project/sub2api/docs/PRD_SUB2API_OPENAI_ROUTING_SERVICE_DEPLOYMENT.md)
