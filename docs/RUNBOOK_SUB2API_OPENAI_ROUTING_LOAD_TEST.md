@@ -41,9 +41,11 @@ Important:
 Each request:
 
 - uses `stream=true`
+- sends `reasoning_effort` only when explicitly provided
 - includes both `system` and `user` messages
 - uses one of 10 prompt families
 - expands prompt length to the requested approximate token target
+- if `--user-prompt` is provided, the default user prompt families are replaced with that prompt for every request, and a neutral system prompt is used to avoid the built-in short-answer system prompts skewing the comparison
 
 ## Metrics captured
 
@@ -86,6 +88,8 @@ Files written locally:
 - `requests.jsonl`
 - `pod.log`
 
+`requests.jsonl` includes the full streamed `response_text` for each request, so you can compare outputs across models and reasoning settings.
+
 ## Required input
 
 You need a valid Sub2API API key for the dev service.
@@ -116,8 +120,14 @@ python3 tools/openai_routing_loadtest_dev.py \
   --token-target 1000 \
   --model-mode single \
   --model gpt-5.4 \
-  --concurrency 10
+  --concurrency 10 \
+  --user-prompt "Explain quantum mechanics in English."
 ```
+
+Additional useful flags:
+
+- `--reasoning-effort none|low|medium|high|xhigh` if you want to explicitly send it
+- `--user-prompt "..."` for a custom prompt override
 
 ## Defaults
 

@@ -287,7 +287,7 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 	return r
 }
 
-func TestOpenAICompatChatCompletionsRoute_DefaultsReasoningAndExtractsInstructions(t *testing.T) {
+func TestOpenAICompatChatCompletionsRoute_OmitsReasoningByDefaultAndExtractsInstructions(t *testing.T) {
 	upstream := &openAICompatTestHTTPUpstream{
 		resp: openAICompatSSE(openAICompatCompletedEvent("resp_chat", "gpt-5.4", "Hello there")),
 	}
@@ -321,8 +321,8 @@ func TestOpenAICompatChatCompletionsRoute_DefaultsReasoningAndExtractsInstructio
 
 	upstreamJSON := gjson.ParseBytes(upstream.lastBody)
 	require.Equal(t, "act as assistant", upstreamJSON.Get("instructions").String())
-	require.Equal(t, "low", upstreamJSON.Get("reasoning.effort").String())
-	require.Equal(t, "auto", upstreamJSON.Get("reasoning.summary").String())
+	require.False(t, upstreamJSON.Get("reasoning.effort").Exists())
+	require.False(t, upstreamJSON.Get("reasoning.summary").Exists())
 	require.True(t, upstreamJSON.Get("store").Exists())
 	require.False(t, upstreamJSON.Get("store").Bool())
 	require.True(t, upstreamJSON.Get("stream").Bool())
@@ -393,7 +393,7 @@ func TestOpenAICompatChatCompletionsRoute_StreamReturnsChatChunks(t *testing.T) 
 	require.Contains(t, body, `[DONE]`)
 }
 
-func TestOpenAICompatResponsesRoute_DefaultsReasoningAndConvertsStringInputForOAuth(t *testing.T) {
+func TestOpenAICompatResponsesRoute_OmitsReasoningByDefaultAndConvertsStringInputForOAuth(t *testing.T) {
 	upstream := &openAICompatTestHTTPUpstream{
 		resp: openAICompatSSE(openAICompatCompletedEvent("resp_direct", "gpt-5.4", "Direct response")),
 	}
@@ -405,8 +405,8 @@ func TestOpenAICompatResponsesRoute_DefaultsReasoningAndConvertsStringInputForOA
 
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, "low", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
-	require.Equal(t, "auto", gjson.GetBytes(upstream.lastBody, "reasoning.summary").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning.effort").Exists())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning.summary").Exists())
 	require.Equal(t, "user", gjson.GetBytes(upstream.lastBody, "input.0.role").String())
 	require.Equal(t, "hello", gjson.GetBytes(upstream.lastBody, "input.0.content").String())
 }

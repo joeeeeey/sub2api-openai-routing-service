@@ -9,7 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestApplyOpenAICompatReasoningDefaultsChatDefaultsToLow(t *testing.T) {
+func TestApplyOpenAICompatReasoningDefaultsChatOmitsReasoningWhenUnset(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set(string(middleware2.ContextKeyOpenAICompatRequest), true)
@@ -20,10 +20,10 @@ func TestApplyOpenAICompatReasoningDefaultsChatDefaultsToLow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := gjson.GetBytes(updated, "reasoning_effort").String(); got != "low" {
-		t.Fatalf("expected reasoning_effort=low, got %q", got)
+	if gjson.GetBytes(updated, "reasoning_effort").Exists() {
+		t.Fatalf("expected reasoning_effort to be omitted, got %s", string(updated))
 	}
-	if decision.Effective != "low" || decision.Source != "default" {
+	if decision.Downstream != "" || decision.Effective != "" || decision.Source != "" {
 		t.Fatalf("unexpected decision: %#v", decision)
 	}
 }
@@ -47,7 +47,7 @@ func TestApplyOpenAICompatReasoningDefaultsChatUsesExtraBodyValue(t *testing.T) 
 	}
 }
 
-func TestApplyOpenAICompatReasoningDefaultsResponsesDefaultsToLow(t *testing.T) {
+func TestApplyOpenAICompatReasoningDefaultsResponsesOmitsReasoningWhenUnset(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set(string(middleware2.ContextKeyOpenAICompatRequest), true)
@@ -58,13 +58,13 @@ func TestApplyOpenAICompatReasoningDefaultsResponsesDefaultsToLow(t *testing.T) 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := gjson.GetBytes(updated, "reasoning.effort").String(); got != "low" {
-		t.Fatalf("expected reasoning.effort=low, got %q", got)
+	if gjson.GetBytes(updated, "reasoning.effort").Exists() {
+		t.Fatalf("expected reasoning.effort to be omitted, got %s", string(updated))
 	}
-	if got := gjson.GetBytes(updated, "reasoning.summary").String(); got != "auto" {
-		t.Fatalf("expected reasoning.summary=auto, got %q", got)
+	if gjson.GetBytes(updated, "reasoning.summary").Exists() {
+		t.Fatalf("expected reasoning.summary to be omitted, got %s", string(updated))
 	}
-	if decision.Effective != "low" || decision.Source != "default" {
+	if decision.Downstream != "" || decision.Effective != "" || decision.Source != "" {
 		t.Fatalf("unexpected decision: %#v", decision)
 	}
 }

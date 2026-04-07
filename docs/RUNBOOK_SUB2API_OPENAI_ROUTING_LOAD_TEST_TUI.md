@@ -42,8 +42,9 @@ When a worker finishes:
 
 - requests are sent with:
   - `stream=true`
-  - `reasoning_effort=low`
+  - `reasoning_effort` is omitted by default and only sent when explicitly provided
 - prompt generation uses the same 10 prompt families as the batch load test
+- if `--user-prompt` is provided, the default user prompt families are replaced with that prompt for every request, and a neutral system prompt is used to avoid the built-in short-answer system prompts skewing the comparison
 - report files are still written locally under `.loadtest-reports/`
 
 ## Run
@@ -66,8 +67,14 @@ python3 tools/openai_routing_loadtest_tui.py \
   --token-target 100 \
   --model gpt-5.3-codex-spark \
   --concurrency 2 \
+  --user-prompt "Explain quantum mechanics in English." \
   --target-url https://dev-sub2api.frai.pro/openai-routing/v1/chat/completions
 ```
+
+Additional useful flags:
+
+- `--reasoning-effort none|low|medium|high|xhigh` if you want to explicitly send it
+- `--user-prompt "..."` for a custom prompt override
 
 ## Default target
 
@@ -80,6 +87,7 @@ https://dev-sub2api.frai.pro/openai-routing/v1/chat/completions
 You can override with:
 
 - `--target-url`
+- `--model-resolver backup-azure` if you want to resolve `gpt-*` or `azure/gpt-*` into LiteLLM hidden backup aliases
 
 ## Output
 
@@ -95,6 +103,8 @@ Generated files:
 - `summary.json`
 - `summary.md`
 - `requests.jsonl`
+
+`requests.jsonl` includes the full streamed `response_text` for each request, so you can diff outputs after the live run.
 
 ## Notes
 

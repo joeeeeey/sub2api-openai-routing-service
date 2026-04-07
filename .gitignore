@@ -143,6 +143,7 @@ docs/*
 .loadtest-reports/
 !docs/RUNBOOK_SUB2API_OPENAI_ROUTING_LOAD_TEST.md
 !docs/RUNBOOK_SUB2API_OPENAI_ROUTING_LOAD_TEST_TUI.md
+!docs/RUNBOOK_LITELLM_BACKUP_AZURE_TTFT.md
 tools/__pycache__/
 .serena/
 .codex/

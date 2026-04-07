@@ -20,10 +20,6 @@ func applyOpenAICompatReasoningDefaults(c *gin.Context, body []byte, requestKind
 	if !middleware2.IsOpenAICompatRequest(c) || len(body) == 0 {
 		return body, decision, nil
 	}
-	defaultEffort := normalizeCompatEffort(middleware2.GetOpenAICompatDefaultReasoningEffort(c))
-	if defaultEffort == "" {
-		defaultEffort = "low"
-	}
 
 	switch requestKind {
 	case "chat_completions":
@@ -37,13 +33,7 @@ func applyOpenAICompatReasoningDefaults(c *gin.Context, body []byte, requestKind
 			decision.Source = "request"
 		}
 		if decision.Downstream == "" {
-			decision.Effective = defaultEffort
-			decision.Source = "default"
-			updated, err := sjson.SetBytes(body, "reasoning_effort", defaultEffort)
-			if err != nil {
-				return body, decision, err
-			}
-			return updated, decision, nil
+			return body, decision, nil
 		}
 		decision.Effective = decision.Downstream
 		if decision.Source == "extra_body" {
@@ -66,17 +56,7 @@ func applyOpenAICompatReasoningDefaults(c *gin.Context, body []byte, requestKind
 			decision.Source = "request"
 		}
 		if decision.Downstream == "" {
-			decision.Effective = defaultEffort
-			decision.Source = "default"
-			updated, err := sjson.SetBytes(body, "reasoning.effort", defaultEffort)
-			if err != nil {
-				return body, decision, err
-			}
-			updated, err = sjson.SetBytes(updated, "reasoning.summary", "auto")
-			if err != nil {
-				return body, decision, err
-			}
-			return updated, decision, nil
+			return body, decision, nil
 		}
 		decision.Effective = decision.Downstream
 		if decision.Source == "extra_body" {

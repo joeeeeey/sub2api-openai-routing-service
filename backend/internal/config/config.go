@@ -1917,7 +1917,7 @@ func setDefaults() {
 	viper.SetDefault("openai_compat_service.auth_mode", "static_key")
 	viper.SetDefault("openai_compat_service.static_key", "")
 	viper.SetDefault("openai_compat_service.service_api_key", "")
-	viper.SetDefault("openai_compat_service.default_reasoning_effort", "low")
+	viper.SetDefault("openai_compat_service.default_reasoning_effort", "")
 
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	viper.SetDefault("concurrency.ping_interval", 10)

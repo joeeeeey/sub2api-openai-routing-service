@@ -73,6 +73,8 @@ FILLER_SENTENCES = [
     "Respond as if the reader is already familiar with modern LLM systems.",
 ]
 
+CUSTOM_USER_SYSTEM_PROMPT = "You are a helpful assistant. Answer clearly in English."
+
 DEFAULT_TARGET_URL = "https://dev-sub2api.frai.pro/openai-routing/v1/chat/completions"
 WORKER_COLORS = ["cyan", "magenta", "green", "yellow", "blue", "bright_cyan", "bright_magenta", "bright_green"]
 
@@ -99,9 +101,30 @@ def truncate_text(text: str, width: int) -> str:
     return text[: max(0, width - 1)] + "…"
 
 
-def build_prompt(enc: tiktoken.Encoding, family_idx: int, target_tokens: int) -> tuple[str, str, int]:
-    system_prompt = SYSTEM_PROMPTS[family_idx % len(SYSTEM_PROMPTS)]
-    user_prompt = USER_PROMPTS[family_idx % len(USER_PROMPTS)]
+def resolve_backup_model(model: str) -> str:
+    model = model.strip()
+    if model.startswith("backup/azure/"):
+        return model
+    if model.startswith("azure/"):
+        return "backup/" + model
+    if model.startswith("gpt-"):
+        return "backup/azure/" + model
+    raise SystemExit(f"Cannot resolve backup alias for model: {model}")
+
+
+def build_prompt(
+    enc: tiktoken.Encoding,
+    family_idx: int,
+    target_tokens: int,
+    *,
+    user_prompt_override: str | None = None,
+) -> tuple[str, str, int]:
+    if user_prompt_override:
+        system_prompt = CUSTOM_USER_SYSTEM_PROMPT
+        user_prompt = user_prompt_override.strip()
+    else:
+        system_prompt = SYSTEM_PROMPTS[family_idx % len(SYSTEM_PROMPTS)]
+        user_prompt = USER_PROMPTS[family_idx % len(USER_PROMPTS)]
     filler = FILLER_SENTENCES[family_idx % len(FILLER_SENTENCES)]
 
     while True:
@@ -131,11 +154,12 @@ class WorkerView:
 
 
 class LiveDashboard:
-    def __init__(self, total_requests: int, concurrency: int, model: str):
+    def __init__(self, total_requests: int, concurrency: int, model: str, title: str):
         self.console = Console()
         self.total_requests = total_requests
         self.concurrency = concurrency
         self.model = model
+        self.title = title
         self.started_at = time.time()
         self.completed = 0
         self.success = 0
@@ -182,6 +206,7 @@ class LiveDashboard:
             Text("Assistant", style="bold green"),
             Text(assistant_preview, style="white"),
             Text(""),
+            Text(f"model={view.model}" if view.model else "", style="dim"),
             Text(f"family={view.family_idx}" if view.family_idx is not None else "", style="dim"),
             Text(f"upstream_request_id={view.upstream_request_id}" if view.upstream_request_id else "", style="dim"),
             Text(f"error={view.error}" if view.error else "", style="bold red"),
@@ -199,7 +224,7 @@ class LiveDashboard:
         elapsed = time.time() - self.started_at
         header = Panel(
             Group(
-                Text("Sub2API Load Test TUI", style="bold"),
+                Text(self.title, style="bold"),
                 Text(
                     f"model={self.model}  total={self.total_requests}  concurrency={self.concurrency}  "
                     f"elapsed={elapsed:.1f}s  completed={self.completed}  success={self.success}  failed={self.failed}",
@@ -239,8 +264,15 @@ async def run_request(
     enc: tiktoken.Encoding,
     request_timeout_seconds: int,
     view: WorkerView,
+    reasoning_effort: str,
+    user_prompt_override: str | None,
 ) -> dict[str, Any]:
-    system_prompt, user_prompt, actual_tokens = build_prompt(enc, family_idx, target_tokens)
+    system_prompt, user_prompt, actual_tokens = build_prompt(
+        enc,
+        family_idx,
+        target_tokens,
+        user_prompt_override=user_prompt_override,
+    )
     view.request_index = request_idx
     view.model = model
     view.family_idx = family_idx
@@ -262,10 +294,11 @@ async def run_request(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "reasoning_effort": "low",
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -346,6 +379,7 @@ async def run_request(
         "prompt_family": family_idx,
         "target_input_tokens": target_tokens,
         "actual_input_tokens": actual_tokens,
+        "reasoning_effort": reasoning_effort or "",
         "status_code": status_code,
         "success": bool(status_code == 200 and done),
         "ttft_ms": round(first_content_at_ms, 3) if first_content_at_ms is not None else None,
@@ -353,7 +387,7 @@ async def run_request(
         "done_seen": done,
         "upstream_request_id": upstream_request_id,
         "error": error_message,
-        "response_preview": view.response_text[:500],
+        "response_text": view.response_text,
     }
 
 
@@ -396,7 +430,14 @@ def summary_markdown(summary: dict[str, Any]) -> str:
         f"- requests: `{cfg['requests']}`",
         f"- target_input_tokens: `{cfg['target_input_tokens']}`",
         f"- concurrency: `{cfg['concurrency']}`",
+        f"- requested_model: `{cfg.get('requested_model', cfg['model'])}`",
         f"- model: `{cfg['model']}`",
+        f"- reasoning_effort: `{cfg['reasoning_effort'] or '<omitted>'}`",
+        (
+            f"- user_prompt_override: `{cfg['user_prompt']}`"
+            if cfg.get("user_prompt")
+            else "- user_prompt_override: `<default prompt families>`"
+        ),
         f"- duration_seconds: `{summary['duration_seconds']}`",
         f"- completion_success_rate: `{summary['completion_success_rate']:.2%}`",
         "",
@@ -428,6 +469,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token-target", type=int)
     parser.add_argument("--model")
     parser.add_argument("--concurrency", type=int, default=None)
+    parser.add_argument("--user-prompt")
+    parser.add_argument("--reasoning-effort")
+    parser.add_argument("--model-resolver", choices=["none", "backup-azure"], default="none")
     parser.add_argument("--target-url", default=DEFAULT_TARGET_URL)
     parser.add_argument("--request-timeout-seconds", type=int, default=1800)
     parser.add_argument("--report-dir")
@@ -456,9 +500,23 @@ def ensure_inputs(args: argparse.Namespace) -> dict[str, Any]:
         if not interactive:
             raise SystemExit("--model is required in non-interactive mode")
         model = prompt_with_default("Model", "gpt-5.3-codex-spark")
+    requested_model = model
+    if args.model_resolver == "backup-azure":
+        model = resolve_backup_model(model)
     concurrency = args.concurrency or 2
     if interactive and args.concurrency is None:
         concurrency = int(prompt_with_default("Concurrency", "2"))
+
+    reasoning_effort = (args.reasoning_effort or "").strip().lower()
+    if not reasoning_effort and interactive:
+        reasoning_effort = input("Reasoning effort (optional): ").strip().lower()
+    if reasoning_effort and reasoning_effort not in {"none", "low", "medium", "high", "xhigh"}:
+        raise SystemExit("--reasoning-effort must be one of: none, low, medium, high, xhigh")
+
+    user_prompt = (args.user_prompt or "").strip()
+    if interactive and not user_prompt:
+        user_prompt = input("Custom user prompt (optional): ").strip()
+
     api_key = os.environ.get("OPENAI_ROUTING_LOADTEST_API_KEY", "").strip()
     if not api_key:
         if not interactive:
@@ -469,8 +527,12 @@ def ensure_inputs(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "requests": requests,
         "target_input_tokens": token_target,
+        "requested_model": requested_model,
         "model": model,
         "concurrency": concurrency,
+        "reasoning_effort": reasoning_effort,
+        "user_prompt": user_prompt,
+        "model_resolver": args.model_resolver,
         "target_url": args.target_url,
         "request_timeout_seconds": args.request_timeout_seconds,
         "api_key": api_key,
@@ -494,7 +556,15 @@ async def main_async() -> int:
     report_dir = create_report_dir(args, values["model"], values["requests"], values["target_input_tokens"], values["concurrency"])
     enc = tiktoken.get_encoding("cl100k_base")
 
-    board = LiveDashboard(total_requests=int(values["requests"]), concurrency=int(values["concurrency"]), model=str(values["model"]))
+    title_parts = ["OpenAI Chat Load Test TUI"]
+    if values.get("model_resolver") == "backup-azure":
+        title_parts.append("LiteLLM Backup Azure")
+    board = LiveDashboard(
+        total_requests=int(values["requests"]),
+        concurrency=int(values["concurrency"]),
+        model=str(values["model"]),
+        title=" | ".join(title_parts),
+    )
     stop_event = asyncio.Event()
     render_task = asyncio.create_task(render_loop(board, stop_event))
 
@@ -525,6 +595,8 @@ async def main_async() -> int:
                     enc=enc,
                     request_timeout_seconds=int(values["request_timeout_seconds"]),
                     view=view,
+                    reasoning_effort=str(values["reasoning_effort"]),
+                    user_prompt_override=(str(values["user_prompt"]) if values["user_prompt"] else None),
                 )
                 results.append(row)
                 board.completed += 1

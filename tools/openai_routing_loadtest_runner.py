@@ -54,6 +54,8 @@ FILLER_SENTENCES = [
     "Respond as if the reader is already familiar with modern LLM systems.",
 ]
 
+CUSTOM_USER_SYSTEM_PROMPT = "You are a helpful assistant. Answer clearly in English."
+
 
 def percentile(values: list[float], p: float) -> float | None:
     if not values:
@@ -70,9 +72,19 @@ def percentile(values: list[float], p: float) -> float | None:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
-def build_prompt(enc: tiktoken.Encoding, family_idx: int, target_tokens: int) -> tuple[str, str, int]:
-    system_prompt = SYSTEM_PROMPTS[family_idx % len(SYSTEM_PROMPTS)]
-    user_prompt = USER_PROMPTS[family_idx % len(USER_PROMPTS)]
+def build_prompt(
+    enc: tiktoken.Encoding,
+    family_idx: int,
+    target_tokens: int,
+    *,
+    user_prompt_override: str | None = None,
+) -> tuple[str, str, int]:
+    if user_prompt_override:
+        system_prompt = CUSTOM_USER_SYSTEM_PROMPT
+        user_prompt = user_prompt_override.strip()
+    else:
+        system_prompt = SYSTEM_PROMPTS[family_idx % len(SYSTEM_PROMPTS)]
+        user_prompt = USER_PROMPTS[family_idx % len(USER_PROMPTS)]
     filler = FILLER_SENTENCES[family_idx % len(FILLER_SENTENCES)]
 
     while True:
@@ -93,18 +105,26 @@ async def execute_request(
     request_idx: int,
     enc: tiktoken.Encoding,
     request_timeout_seconds: int,
+    reasoning_effort: str,
+    user_prompt_override: str | None,
 ) -> dict[str, Any]:
-    system_prompt, user_prompt, actual_tokens = build_prompt(enc, family_idx, target_tokens)
+    system_prompt, user_prompt, actual_tokens = build_prompt(
+        enc,
+        family_idx,
+        target_tokens,
+        user_prompt_override=user_prompt_override,
+    )
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "reasoning_effort": "low",
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -117,6 +137,7 @@ async def execute_request(
     status_code: int | None = None
     error_message: str | None = None
     upstream_request_id: str | None = None
+    response_parts: list[str] = []
 
     try:
         timeout = aiohttp.ClientTimeout(total=request_timeout_seconds)
@@ -147,8 +168,10 @@ async def execute_request(
                             for choice in payload_obj.get("choices", []) or []:
                                 delta = choice.get("delta") or {}
                                 content = delta.get("content")
-                                if content and first_content_at_ms is None:
-                                    first_content_at_ms = (time.perf_counter() - started) * 1000.0
+                                if content:
+                                    response_parts.append(content)
+                                    if first_content_at_ms is None:
+                                        first_content_at_ms = (time.perf_counter() - started) * 1000.0
                         if done:
                             break
                     if done:
@@ -168,6 +191,7 @@ async def execute_request(
         "prompt_family": family_idx,
         "target_input_tokens": target_tokens,
         "actual_input_tokens": actual_tokens,
+        "reasoning_effort": reasoning_effort or "",
         "status_code": status_code,
         "success": bool(status_code == 200 and done),
         "ttft_ms": round(first_content_at_ms, 3) if first_content_at_ms is not None else None,
@@ -175,6 +199,7 @@ async def execute_request(
         "done_seen": done,
         "upstream_request_id": upstream_request_id,
         "error": error_message,
+        "response_text": "".join(response_parts),
     }
 
 
@@ -227,7 +252,10 @@ def summary_markdown(summary: dict[str, Any]) -> str:
     lines.append(f"- requests_per_model: `{cfg['requests_per_model']}`")
     lines.append(f"- target_input_tokens: `{cfg['target_input_tokens']}`")
     lines.append(f"- concurrency: `{cfg['concurrency']}`")
+    lines.append(f"- reasoning_effort: `{cfg['reasoning_effort'] or '<omitted>'}`")
     lines.append(f"- models: `{', '.join(cfg['models'])}`")
+    if cfg.get("user_prompt"):
+        lines.append(f"- user_prompt_override: `{cfg['user_prompt']}`")
     lines.append(f"- duration_seconds: `{summary['duration_seconds']}`")
     lines.append("")
     lines.append("| Model | Total | Completed | Success Rate | TTFT p50 | TTFT p95 | TTFT p99 | Avg TTFT | Avg Total | Max Total |")
@@ -287,6 +315,8 @@ async def main() -> int:
                         request_idx=request_idx,
                         enc=enc,
                         request_timeout_seconds=config["request_timeout_seconds"],
+                        reasoning_effort=config["reasoning_effort"],
+                        user_prompt_override=config.get("user_prompt"),
                     )
 
             tasks = [worker(i) for i in range(config["requests_per_model"])]

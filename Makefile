@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static openai-routing-loadtest-dev openai-routing-loadtest-tui routing-service-image-build routing-service-image-push
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static openai-routing-loadtest-dev openai-routing-loadtest-tui litellm-backup-azure-ttft litellm-backup-azure-tui routing-service-image-build routing-service-image-push
 
 FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
@@ -152,3 +152,9 @@ openai-routing-loadtest-dev:
 
 openai-routing-loadtest-tui:
 	@python3 tools/openai_routing_loadtest_tui.py
+
+litellm-backup-azure-ttft:
+	@python3 tools/litellm_backup_azure_ttft.py
+
+litellm-backup-azure-tui:
+	@OPENAI_ROUTING_LOADTEST_API_KEY="$(LITELLM_API_KEY)" python3 tools/openai_routing_loadtest_tui.py --target-url https://dev-litellm.frai.pro/chat/completions --model-resolver backup-azure

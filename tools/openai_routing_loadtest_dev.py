@@ -21,8 +21,6 @@ DEFAULT_URL = "http://sub2api-openai-routing-service.component.svc.cluster.local
 DEFAULT_IMAGE = "python:3.11-slim"
 DEFAULT_CONCURRENCY = 10
 DEFAULT_TIMEOUT_SECONDS = 1800
-
-
 def run(cmd: list[str], *, input_text: str | None = None, check: bool = True, capture_output: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
@@ -45,6 +43,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-mode", choices=["all", "single"])
     parser.add_argument("--model")
     parser.add_argument("--concurrency", type=int, default=None)
+    parser.add_argument("--user-prompt")
+    parser.add_argument("--reasoning-effort")
     parser.add_argument("--context", default=DEFAULT_CONTEXT)
     parser.add_argument("--namespace", default=DEFAULT_NAMESPACE)
     parser.add_argument("--target-url", default=DEFAULT_URL)
@@ -90,6 +90,16 @@ def ensure_inputs(args: argparse.Namespace) -> dict[str, object]:
     if interactive and args.concurrency is None:
         concurrency = int(prompt_with_default("Concurrency", str(DEFAULT_CONCURRENCY)))
 
+    reasoning_effort = (args.reasoning_effort or "").strip().lower()
+    if not reasoning_effort and interactive:
+        reasoning_effort = input("Reasoning effort (optional): ").strip().lower()
+    if reasoning_effort and reasoning_effort not in {"none", "low", "medium", "high", "xhigh"}:
+        raise SystemExit("--reasoning-effort must be one of: none, low, medium, high, xhigh")
+
+    user_prompt = (args.user_prompt or "").strip()
+    if interactive and not user_prompt:
+        user_prompt = input("Custom user prompt (optional): ").strip()
+
     api_key = os.environ.get("OPENAI_ROUTING_LOADTEST_API_KEY", "").strip()
     if not api_key:
         if not interactive:
@@ -103,6 +113,8 @@ def ensure_inputs(args: argparse.Namespace) -> dict[str, object]:
         "target_input_tokens": token_target,
         "models": models,
         "concurrency": concurrency,
+        "reasoning_effort": reasoning_effort,
+        "user_prompt": user_prompt,
         "target_url": args.target_url,
         "request_timeout_seconds": args.request_timeout_seconds,
         "api_key": api_key,
@@ -244,6 +256,9 @@ def main() -> int:
         print(f"[loadtest] requests_per_model: {requests_per_model}")
         print(f"[loadtest] target_input_tokens: {token_target}")
         print(f"[loadtest] concurrency: {values['concurrency']}")
+        print(f"[loadtest] reasoning_effort: {values['reasoning_effort'] or '<omitted>'}")
+        if values["user_prompt"]:
+            print(f"[loadtest] user_prompt override: {values['user_prompt']}")
 
         cm_yaml = run(
             [
