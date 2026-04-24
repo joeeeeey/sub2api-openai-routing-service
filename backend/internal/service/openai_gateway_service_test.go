@@ -2259,7 +2259,10 @@ func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	require.True(t, ok)
 	require.Contains(t, string(finalResp), `"id":"resp_1"`)
 	require.Contains(t, string(finalResp), `"input_tokens":11`)
-	require.Contains(t, string(finalResp), `"text":"hello world"`)
+
+	patched, supplemented := supplementResponseOutputFromSSE(finalResp, body)
+	require.True(t, supplemented)
+	require.Contains(t, string(patched), `"text":"hello world"`)
 }
 
 func TestReconstructResponseOutputFromSSE_ImageGenerationOutputItemDone(t *testing.T) {

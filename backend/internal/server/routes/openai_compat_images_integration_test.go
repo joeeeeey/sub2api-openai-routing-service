@@ -75,7 +75,7 @@ func newOpenAICompatImagesTestRouter(t *testing.T, upstream *openAICompatTestHTT
 	accountRepo := openAICompatTestAccountRepo{accounts: []service.Account{account}}
 	usageRepo := &openAICompatTestUsageLogRepo{}
 	concurrencySvc := service.NewConcurrencyService(openAICompatTestConcurrencyCache{})
-	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
+	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg)
 	openAISvc := service.NewOpenAIGatewayService(
 		accountRepo,
 		usageRepo,
@@ -92,6 +92,9 @@ func newOpenAICompatImagesTestRouter(t *testing.T, upstream *openAICompatTestHTT
 		billingCacheSvc,
 		upstream,
 		&service.DeferredService{},
+		nil,
+		nil,
+		nil,
 		nil,
 	)
 	openAIHandler := handler.NewOpenAIGatewayHandler(

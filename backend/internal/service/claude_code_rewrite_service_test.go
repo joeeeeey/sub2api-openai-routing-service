@@ -137,7 +137,7 @@ func TestGatewayService_AnthropicOAuth_ClaudeCodeForwardAppliesRewrite(t *testin
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, upstream.lastReq)
-	require.Equal(t, "Bearer oauth-token", upstream.lastReq.Header.Get("authorization"))
+	require.Equal(t, "Bearer oauth-token", getHeaderRaw(upstream.lastReq.Header, "authorization"))
 	require.Equal(t, "claude-cli/2.1.81 (external, cli)", upstream.lastReq.Header.Get("User-Agent"))
 	require.Empty(t, upstream.lastReq.Header.Get("x-anthropic-billing-header"))
 

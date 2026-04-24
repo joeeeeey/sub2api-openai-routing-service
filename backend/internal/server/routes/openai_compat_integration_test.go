@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -85,7 +86,7 @@ func (u *openAICompatTestHTTPUpstream) Do(req *http.Request, proxyURL string, ac
 	return u.resp, nil
 }
 
-func (u *openAICompatTestHTTPUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, enableTLSFingerprint bool) (*http.Response, error) {
+func (u *openAICompatTestHTTPUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, tlsProfile *tlsfingerprint.Profile) (*http.Response, error) {
 	return u.Do(req, proxyURL, accountID, accountConcurrency)
 }
 
@@ -238,7 +239,7 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 	accountRepo := openAICompatTestAccountRepo{accounts: []service.Account{account}}
 	usageRepo := &openAICompatTestUsageLogRepo{}
 	concurrencySvc := service.NewConcurrencyService(openAICompatTestConcurrencyCache{})
-	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
+	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg)
 	openAISvc := service.NewOpenAIGatewayService(
 		accountRepo,
 		usageRepo,
@@ -255,6 +256,9 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 		billingCacheSvc,
 		upstream,
 		&service.DeferredService{},
+		nil,
+		nil,
+		nil,
 		nil,
 	)
 	openAIHandler := handler.NewOpenAIGatewayHandler(
