@@ -178,12 +178,54 @@ For routing-service or benchmark changes, prefer this minimum checklist:
   - explicit reasoning preserved
   - stream chat chunk behavior
 
+### Release Rebase Checklist
+
+When rebasing `feature/openai-routing-service-mvp` onto a newer upstream release tag:
+
+- Rebase onto the upstream release tag first, then replay branch-specific commits.
+- Prefer upstream implementations when the release now contains an equivalent helper or bridge.
+- Remove branch-local duplicate helpers if they collide with upstream and keep only one code path.
+- Expect test-only constructor signature drift after release syncs, especially in:
+  - `backend/internal/server/routes/*integration_test.go`
+  - gateway service constructor sites
+  - TLS upstream mock interfaces
+- Preserve the branch-specific OpenAI routing behavior below:
+  - `/openai-routing/v1/*` routes stay registered
+  - omitted `reasoning_effort` must remain omitted
+  - `/v1/responses` image generation keeps using a Responses-capable text model plus `tools[].type=image_generation`
+  - non-stream Responses JSON must still supplement empty terminal `output` from SSE item events when needed
+- After a history-rewriting rebase, push to `private` with `--force-with-lease`, not a blind force push.
+
+### Required Rebase Validation
+
+For any release rebase touching the OpenAI routing branch, do not stop at compile/test-only validation.
+The minimum acceptance bar is:
+
+- `python3 -m py_compile` for changed scripts under `tools/`
+- `cd backend && GOCACHE=/tmp/sub2api-go-cache go test ./internal/service ./internal/handler ./internal/server/routes -count=1`
+- `cd backend && GOCACHE=/tmp/sub2api-go-cache go test ./cmd/openai-oauth-client -count=1`
+- Public dev E2E against `https://dev-sub2api.frai.pro/openai-routing/v1/responses` for:
+  - `gpt-5.2`
+  - `gpt-5.3`
+  - `gpt-5.4`
+  - `gpt-image-2` via `tools[].type=image_generation`
+
+### Public Dev E2E Expectations
+
+For this branch, a release rebase should not be treated as complete until the following are confirmed end-to-end:
+
+- text response path returns `HTTP 200` with `status=completed`
+- `gpt-5.2`, `gpt-5.3`, and `gpt-5.4` each return the expected assistant text
+- image generation returns `HTTP 200`, `status=completed`, and a non-empty `image_generation_call.result`
+- at least one generated image is decoded and saved locally to verify the payload is a real image, not only JSON-shaped success
+
 ## Notes For Future Agents
 
 - There are many benchmark-related changes on this branch; check `git status` carefully before mixing unrelated work.
 - This repository root is **not** a Go module; run Go tests from `backend/`.
 - When the user asks for "latest dev deployment state", verify actual Argo / Kubernetes state rather than assuming merged PRs are already live.
 - The dev routing-service image currently uses hash tags in ECR; keep image tags consistent with project conventions.
+- The `private` remote for this branch will often require `--force-with-lease` after upstream release rebases because the branch history is intentionally rewritten.
 
 ## Claude Code Rewrite Work
 
