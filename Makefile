@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static openai-routing-loadtest-dev openai-routing-loadtest-tui litellm-backup-azure-ttft litellm-backup-azure-tui routing-service-image-build routing-service-image-push
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan oauth-local-server oauth-local-healthcheck oauth-local-chat-test oauth-local-chat-stream-test openai-routing-deps-up openai-routing-deps-down openai-routing-deps-logs openai-routing-provision-local openai-routing-service-local openai-routing-service-local-static openai-routing-ui-build openai-routing-ui-local openai-routing-healthcheck openai-routing-chat-test openai-routing-chat-test-static openai-routing-image-test openai-routing-loadtest-dev openai-routing-loadtest-tui litellm-backup-azure-ttft litellm-backup-azure-tui routing-service-image-build routing-service-image-push
 
 FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
@@ -122,6 +122,27 @@ openai-routing-chat-test-static:
 		-H "Authorization: Bearer $$OPENAI_COMPAT_STATIC_KEY" \
 		-H 'Content-Type: application/json' \
 		-d '{"model":"gpt-5.4","messages":[{"role":"system","content":"act as assistant"},{"role":"user","content":"say hello in 5 words"}],"stream":false}'
+
+openai-routing-image-test:
+	@test -n "$$OPENAI_ROUTING_UI_API_KEY" || (echo "OPENAI_ROUTING_UI_API_KEY is required" >&2; exit 1)
+	@response_file="$${OPENAI_ROUTING_IMAGE_RESPONSE_FILE:-$${TMPDIR:-/tmp}/openai-routing-responses-image.json}"; \
+	output_format="$${OPENAI_ROUTING_IMAGE_OUTPUT_FORMAT:-png}"; \
+	output_file="$${OPENAI_ROUTING_IMAGE_OUTPUT_FILE:-$${TMPDIR:-/tmp}/openai-routing-responses-image.$$output_format}"; \
+	args=""; \
+	if [ -n "$$OPENAI_ROUTING_IMAGE_REF_1" ]; then args="$$args --ref $$OPENAI_ROUTING_IMAGE_REF_1"; fi; \
+	if [ -n "$$OPENAI_ROUTING_IMAGE_REF_2" ]; then args="$$args --ref $$OPENAI_ROUTING_IMAGE_REF_2"; fi; \
+	python3 tools/openai_responses_image_demo.py \
+		--api-key "$$OPENAI_ROUTING_UI_API_KEY" \
+		--prompt "$${OPENAI_ROUTING_IMAGE_PROMPT:-A minimal red square centered on a white background.}" \
+		--model "$${OPENAI_ROUTING_RESPONSES_MODEL:-gpt-5.4-mini}" \
+		--image-model "$${OPENAI_ROUTING_IMAGE_MODEL:-gpt-image-2}" \
+		--size "$${OPENAI_ROUTING_IMAGE_SIZE:-1024x1024}" \
+		--output-format "$$output_format" \
+		--quality "$${OPENAI_ROUTING_IMAGE_QUALITY:-high}" \
+		--background "$${OPENAI_ROUTING_IMAGE_BACKGROUND:-auto}" \
+		--response-file "$$response_file" \
+		--output-file "$$output_file" \
+		$$args
 
 openai-routing-deps-up:
 	@mkdir -p deploy/routing_postgres_data deploy/routing_redis_data

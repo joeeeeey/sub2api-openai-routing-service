@@ -2246,9 +2246,12 @@ func TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes(t *te
 
 func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	body := strings.Join([]string{
-		`event: message`,
-		`data: {"type":"response.in_progress","response":{"id":"resp_1"}}`,
-		`data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-4o","usage":{"input_tokens":11,"output_tokens":22,"input_tokens_details":{"cached_tokens":3}}}}`,
+		`data: {"type":"response.created","response":{"id":"resp_1","object":"response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"in_progress"}}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"item_id":"msg_1","delta":"hello"}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"item_id":"msg_1","delta":" world"}`,
+		`data: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"completed"}}`,
+		`data: {"type":"response.completed","response":{"id":"resp_1","object":"response","model":"gpt-4o","status":"completed","output":[],"usage":{"input_tokens":11,"output_tokens":22,"input_tokens_details":{"cached_tokens":3}}}}`,
 		`data: [DONE]`,
 	}, "\n")
 
@@ -2256,6 +2259,32 @@ func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	require.True(t, ok)
 	require.Contains(t, string(finalResp), `"id":"resp_1"`)
 	require.Contains(t, string(finalResp), `"input_tokens":11`)
+	require.Contains(t, string(finalResp), `"text":"hello world"`)
+}
+
+func TestReconstructResponseOutputFromSSE_ImageGenerationOutputItemDone(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"type":"response.output_item.done","item":{"id":"ig_123","type":"image_generation_call","result":"aGVsbG8=","revised_prompt":"draw a cat","output_format":"png"}}`,
+		`data: [DONE]`,
+	}, "\n")
+
+	output, ok := reconstructResponseOutputFromSSE(body)
+	require.True(t, ok)
+	require.Contains(t, string(output), `"image_generation_call"`)
+	require.Contains(t, string(output), `"result":"aGVsbG8="`)
+}
+
+func TestSupplementResponseOutputFromSSE_FillsImageGenerationPlaceholder(t *testing.T) {
+	finalResponse := []byte(`{"id":"resp_1","output":[{"type":"image_generation_call","id":"ig_123","status":"in_progress"}]}`)
+	body := strings.Join([]string{
+		`data: {"type":"response.output_item.done","item":{"id":"ig_123","type":"image_generation_call","result":"aGVsbG8=","revised_prompt":"draw a cat","output_format":"png"}}`,
+		`data: [DONE]`,
+	}, "\n")
+
+	patched, ok := supplementResponseOutputFromSSE(finalResponse, body)
+	require.True(t, ok)
+	require.Contains(t, string(patched), `"result":"aGVsbG8="`)
+	require.Contains(t, string(patched), `"revised_prompt":"draw a cat"`)
 }
 
 func TestHandleSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
@@ -2270,8 +2299,12 @@ func TestHandleSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
 	}
 	body := []byte(strings.Join([]string{
-		`data: {"type":"response.in_progress","response":{"id":"resp_2"}}`,
-		`data: {"type":"response.completed","response":{"id":"resp_2","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":9,"input_tokens_details":{"cached_tokens":1}}}}`,
+		`data: {"type":"response.created","response":{"id":"resp_2","object":"response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_2","role":"assistant","status":"in_progress"}}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"item_id":"msg_2","delta":"done"}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"item_id":"msg_2","delta":"!"}`,
+		`data: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_2","role":"assistant","status":"completed"}}`,
+		`data: {"type":"response.completed","response":{"id":"resp_2","object":"response","model":"gpt-4o","status":"completed","output":[],"usage":{"input_tokens":7,"output_tokens":9,"input_tokens_details":{"cached_tokens":1}}}}`,
 		`data: [DONE]`,
 	}, "\n"))
 
@@ -2284,6 +2317,7 @@ func TestHandleSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
 	// Header 可能由上游 Content-Type 透传；关键是 body 已转换为最终 JSON 响应。
 	require.NotContains(t, rec.Body.String(), "event:")
 	require.Contains(t, rec.Body.String(), `"id":"resp_2"`)
+	require.Contains(t, rec.Body.String(), `"text":"done!"`)
 	require.NotContains(t, rec.Body.String(), "data:")
 }
 

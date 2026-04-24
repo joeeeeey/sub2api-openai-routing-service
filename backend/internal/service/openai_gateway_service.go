@@ -5197,15 +5197,10 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
 			*usage = parsedUsage
 		}
-		// When the terminal event has an empty output array, reconstruct
-		// output from accumulated delta events so the client gets full content.
-		// gjson Array() returns empty slice for null, missing, or empty arrays.
-		if len(gjson.GetBytes(finalResponse, "output").Array()) == 0 {
-			if outputJSON, reconstructed := reconstructResponseOutputFromSSE(bodyText); reconstructed {
-				if patched, err := sjson.SetRawBytes(finalResponse, "output", outputJSON); err == nil {
-					finalResponse = patched
-				}
-			}
+		// Terminal responses can contain empty placeholder output items. Refill
+		// them from the buffered SSE item events before returning JSON.
+		if patched, supplemented := supplementResponseOutputFromSSE(finalResponse, bodyText); supplemented {
+			finalResponse = patched
 		}
 		body = finalResponse
 		if originalModel != mappedModel {
@@ -5353,6 +5348,99 @@ func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
 		return nil, false
 	}
 	return outputJSON, true
+}
+
+func supplementResponseOutputFromSSE(finalResponse []byte, bodyText string) ([]byte, bool) {
+	outputJSON, reconstructed := reconstructResponseOutputFromSSE(bodyText)
+	if !reconstructed {
+		return finalResponse, false
+	}
+
+	currentOutput := gjson.GetBytes(finalResponse, "output").Array()
+	if len(currentOutput) == 0 {
+		if patched, err := sjson.SetRawBytes(finalResponse, "output", outputJSON); err == nil {
+			return patched, true
+		}
+		return finalResponse, false
+	}
+
+	reconstructedItems := gjson.ParseBytes(outputJSON).Array()
+	reconstructedByID := make(map[string]gjson.Result, len(reconstructedItems))
+	reconstructedWithoutID := make([]gjson.Result, 0)
+	for _, item := range reconstructedItems {
+		if id := strings.TrimSpace(item.Get("id").String()); id != "" {
+			reconstructedByID[id] = item
+		} else {
+			reconstructedWithoutID = append(reconstructedWithoutID, item)
+		}
+	}
+
+	patched := finalResponse
+	changed := false
+	for idx, item := range currentOutput {
+		id := strings.TrimSpace(item.Get("id").String())
+		if id == "" {
+			continue
+		}
+		reconstructedItem, ok := reconstructedByID[id]
+		if !ok {
+			continue
+		}
+		if !responseOutputNeedsSupplement(item) {
+			delete(reconstructedByID, id)
+			continue
+		}
+		next, err := sjson.SetRawBytes(patched, fmt.Sprintf("output.%d", idx), []byte(reconstructedItem.Raw))
+		if err != nil {
+			continue
+		}
+		patched = next
+		changed = true
+		delete(reconstructedByID, id)
+	}
+
+	for _, item := range reconstructedByID {
+		next, err := sjson.SetRawBytes(patched, "output.-1", []byte(item.Raw))
+		if err != nil {
+			continue
+		}
+		patched = next
+		changed = true
+	}
+	for _, item := range reconstructedWithoutID {
+		next, err := sjson.SetRawBytes(patched, "output.-1", []byte(item.Raw))
+		if err != nil {
+			continue
+		}
+		patched = next
+		changed = true
+	}
+
+	return patched, changed
+}
+
+func responseOutputNeedsSupplement(item gjson.Result) bool {
+	switch item.Get("type").String() {
+	case "image_generation_call":
+		return strings.TrimSpace(item.Get("result").String()) == ""
+	case "message":
+		content := item.Get("content").Array()
+		if len(content) == 0 {
+			return true
+		}
+		for _, part := range content {
+			if strings.TrimSpace(part.Get("text").String()) != "" {
+				return false
+			}
+		}
+		return true
+	case "function_call":
+		return strings.TrimSpace(item.Get("arguments").String()) == ""
+	case "reasoning":
+		return len(item.Get("summary").Array()) == 0
+	default:
+		return false
+	}
 }
 
 func extractImageGenerationOutputFromSSEData(data []byte, seen map[string]struct{}) (json.RawMessage, bool) {

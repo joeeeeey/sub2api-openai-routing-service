@@ -184,3 +184,71 @@ For routing-service or benchmark changes, prefer this minimum checklist:
 - This repository root is **not** a Go module; run Go tests from `backend/`.
 - When the user asks for "latest dev deployment state", verify actual Argo / Kubernetes state rather than assuming merged PRs are already live.
 - The dev routing-service image currently uses hash tags in ECR; keep image tags consistent with project conventions.
+
+## Claude Code Rewrite Work
+
+This repository now also contains an Anthropic-side integration effort for:
+
+- Claude Code CLI -> `sub2api` -> Anthropic upstream
+- preserving `sub2api` multi-account Anthropic routing
+- adding a Go rewrite module whose request-rewrite semantics are primarily based on:
+  - `/Users/joey/repos/finalroundai/cc-gateway`
+
+### Cross-Repo Relationship
+
+- `sub2api` is the implementation target and runtime.
+- `cc-gateway` is a reference implementation for rewrite semantics only.
+- Do **not** try to move `cc-gateway` runtime architecture into `sub2api`.
+- Do **not** replace `sub2api` account pool, sticky routing, failover, or token refresh with `cc-gateway` logic.
+
+### Anthropic Rewrite Scope
+
+For this work, prioritize the real Claude Code CLI path:
+
+- `/v1/messages`
+- `/v1/messages/count_tokens`
+
+Do **not** treat `/openai-routing/*` as the target path for this effort unless explicitly asked.
+
+### Behavior To Preserve
+
+- `GatewayHandler` account selection flow
+- `SelectAccountWithLoadAwareness`
+- sticky session behavior
+- Anthropic multi-account failover
+- `ClaudeTokenProvider` / Anthropic OAuth refresh
+- existing `IdentityService` ownership of:
+  - `metadata.user_id` format compatibility
+  - session masking
+  - account-scoped fingerprint caching
+
+### Rewrite Ownership Boundary
+
+The new rewrite module should own:
+
+- system prompt env/path rewriting
+- `<system-reminder>` rewriting
+- billing-header stripping in request body
+- top-level leak-field cleanup (`baseUrl`, `base_url`, `gateway`)
+- final upstream header cleanup relevant to Claude Code rewrite
+
+The existing `IdentityService` should remain the source of truth for:
+
+- generating / formatting `metadata.user_id`
+- session-id masking
+- account-scoped canonical fingerprint state
+
+### Suggested Files For This Work
+
+- `docs/DESIGN_CLAUDECODE_REWRITE_INTEGRATION.md`
+- `backend/internal/service/claude_code_rewrite_service.go`
+- `backend/internal/service/claude_code_rewrite_service_test.go`
+- `backend/internal/service/gateway_service.go`
+
+### Testing Notes
+
+- Run Go tests from `backend/`.
+- Prefer targeted service tests first.
+- If modifying Anthropic gateway request behavior, verify both:
+  - real Claude Code request path behavior changes as expected
+  - non-Claude-Code request behavior stays unchanged

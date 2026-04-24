@@ -4552,6 +4552,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		account.ID, account.Name, account.Platform, account.Type, tlsProfile, proxyURL)
 	// Pre-filter: strip empty text blocks (including nested in tool_result) to prevent upstream 400.
 	body = StripEmptyTextBlocks(body)
+	body = s.maybeApplyClaudeCodeRequestRewrite(ctx, c, account, body)
 
 	// 重试循环
 	var resp *http.Response
@@ -6184,6 +6185,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if fingerprint != nil {
 		s.identityService.ApplyFingerprint(req, fingerprint)
 	}
+	s.maybeApplyClaudeCodeHeaderRewrite(ctx, req, account, fingerprint)
 
 	// 确保必要的headers存在（保持原始大小写）
 	if getHeaderRaw(req.Header, "content-type") == "" {
@@ -9154,6 +9156,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	// Pre-filter: strip empty text blocks to prevent upstream 400.
 	body = StripEmptyTextBlocks(body)
+	body = s.maybeApplyClaudeCodeRequestRewrite(ctx, c, account, body)
 
 	isClaudeCodeCT := IsClaudeCodeClient(ctx) || isClaudeCodeClient(c.GetHeader("User-Agent"), parsed.MetadataUserID)
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCodeCT
@@ -9594,6 +9597,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if ctEnableFP && ctFingerprint != nil {
 		s.identityService.ApplyFingerprint(req, ctFingerprint)
 	}
+	s.maybeApplyClaudeCodeHeaderRewrite(ctx, req, account, nil)
 
 	// 确保必要的 headers 存在（保持原始大小写）
 	if getHeaderRaw(req.Header, "content-type") == "" {

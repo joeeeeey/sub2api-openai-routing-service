@@ -205,11 +205,11 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 	}
 	groupID := int64(7001)
 	apiKey := &service.APIKey{
-		ID:     8001,
-		Key:    "sk-test",
-		Status: service.StatusActive,
-		User:   user,
-		UserID: user.ID,
+		ID:      8001,
+		Key:     "sk-test",
+		Status:  service.StatusActive,
+		User:    user,
+		UserID:  user.ID,
 		GroupID: &groupID,
 		Group: &service.Group{
 			ID:             groupID,
@@ -229,9 +229,9 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 		Schedulable: true,
 		Concurrency: 3,
 		Credentials: map[string]any{
-			"access_token":        "oauth-token",
-			"chatgpt_account_id":  "chatgpt-account-id",
-			"refresh_token":       "refresh-token",
+			"access_token":       "oauth-token",
+			"chatgpt_account_id": "chatgpt-account-id",
+			"refresh_token":      "refresh-token",
 		},
 	}
 

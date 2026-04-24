@@ -44,6 +44,7 @@ func RegisterOpenAICompatServiceRoutes(
 
 	compat.GET("/v1/models", h.Gateway.Models)
 	compat.POST("/v1/chat/completions", h.OpenAIGateway.ChatCompletions)
+	compat.POST("/v1/images/generations", h.OpenAIGateway.Images)
 	compat.POST("/v1/responses", h.OpenAIGateway.Responses)
 	compat.POST("/v1/responses/*subpath", h.OpenAIGateway.Responses)
 }
