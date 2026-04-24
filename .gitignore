@@ -118,6 +118,7 @@ backend/.installed
 # ===================
 tests
 CLAUDE.md
+!CLAUDE.md
 .claude
 scripts
 !scripts/
