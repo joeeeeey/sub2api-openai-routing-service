@@ -260,12 +260,14 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 		nil,
 		nil,
 		nil,
+		nil,
 	)
 	openAIHandler := handler.NewOpenAIGatewayHandler(
 		openAISvc,
 		concurrencySvc,
 		billingCacheSvc,
 		&service.APIKeyService{},
+		nil,
 		nil,
 		nil,
 		cfg,

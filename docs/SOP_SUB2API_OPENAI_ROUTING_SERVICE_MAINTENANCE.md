@@ -62,7 +62,7 @@
 - compat route 是否还挂着
 - auth / group 校验是否正常
 - `system -> instructions` 是否仍成立
-- `reasoning_effort` 默认值是否仍正确
+- `reasoning_effort` 省略不注入、显式传递保留的语义是否仍正确
 - OAuth internal upstream 变换是否仍兼容
 
 ## 3. 推荐同步策略
@@ -121,8 +121,10 @@ git rebase origin/main
 
 - `chat.completions` 可以被下游标准 OpenAI SDK 调用
 - `system` 消息在 OAuth/Codex internal 路径中会被提取为 `instructions`
-- compat 路径默认 `reasoning_effort=low`
-- `/v1/responses` 默认 `reasoning.effort=low` 且 `reasoning.summary=auto`
+- compat 路径如果客户端省略 `reasoning_effort`，必须保持省略，不做默认注入
+- compat 路径如果客户端显式传 `reasoning_effort`，必须保留并转发
+- `/v1/responses` 如果客户端省略 `reasoning.effort`，必须保持省略，不做默认注入
+- `/v1/responses` 如果客户端显式传 `reasoning.effort`，缺少 `reasoning.summary` 时可补 `auto`
 - stream 请求能返回标准 chat chunk / `[DONE]`
 
 ### 4.3 上游协议变换
@@ -160,11 +162,12 @@ OAuth internal 路径必须继续保证：
 
 - `/openai-routing/v1/chat/completions` 正常返回
 - `system -> instructions`
-- 默认 `reasoning_effort=low`
+- 省略 `reasoning_effort` 时不注入默认值
 - 显式 `reasoning_effort` 保留
 - 非 OpenAI group 被拒绝
 - stream chunk 行为
-- `/openai-routing/v1/responses` 默认 reasoning + string input 转换
+- `/openai-routing/v1/responses` 省略 reasoning 时保持省略
+- `/openai-routing/v1/responses` 显式 reasoning + string input 转换
 
 ### 5.2 已有 compat/unit tests
 

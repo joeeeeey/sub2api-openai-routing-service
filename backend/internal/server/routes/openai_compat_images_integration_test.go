@@ -50,11 +50,12 @@ func newOpenAICompatImagesTestRouter(t *testing.T, upstream *openAICompatTestHTT
 		UserID:  user.ID,
 		GroupID: &groupID,
 		Group: &service.Group{
-			ID:             groupID,
-			Name:           "openai-image-group",
-			Platform:       service.PlatformOpenAI,
-			Status:         service.StatusActive,
-			RateMultiplier: 1,
+			ID:                   groupID,
+			Name:                 "openai-image-group",
+			Platform:             service.PlatformOpenAI,
+			Status:               service.StatusActive,
+			RateMultiplier:       1,
+			AllowImageGeneration: true,
 		},
 	}
 
@@ -96,12 +97,14 @@ func newOpenAICompatImagesTestRouter(t *testing.T, upstream *openAICompatTestHTT
 		nil,
 		nil,
 		nil,
+		nil,
 	)
 	openAIHandler := handler.NewOpenAIGatewayHandler(
 		openAISvc,
 		concurrencySvc,
 		billingCacheSvc,
 		&service.APIKeyService{},
+		nil,
 		nil,
 		nil,
 		cfg,
