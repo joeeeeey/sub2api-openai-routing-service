@@ -288,6 +288,7 @@ The minimum acceptance bar is:
   - `gpt-5.2`
   - `gpt-5.3`
   - `gpt-5.4`
+  - `gpt-5.5`
   - `gpt-image-2` via `tools[].type=image_generation`
 
 ### Public Dev E2E Expectations
@@ -295,7 +296,7 @@ The minimum acceptance bar is:
 For this branch, a release rebase should not be treated as complete until the following are confirmed end-to-end:
 
 - text response path returns `HTTP 200` with `status=completed`
-- `gpt-5.2`, `gpt-5.3`, and `gpt-5.4` each return the expected assistant text
+- `gpt-5.2`, `gpt-5.3`, `gpt-5.4`, and `gpt-5.5` each return the expected assistant text
 - image generation returns `HTTP 200`, `status=completed`, and a non-empty `image_generation_call.result`
 - at least one generated image is decoded and saved locally to verify the payload is a real image, not only JSON-shaped success
 

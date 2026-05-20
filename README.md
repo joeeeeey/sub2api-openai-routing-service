@@ -16,6 +16,7 @@ Current branch focus:
   - `gpt-5.2`
   - `gpt-5.3`
   - `gpt-5.4`
+  - `gpt-5.5`
   - `gpt-image-2`
 - local load-test / TUI tooling
 - routing-service image build and deploy workflow
@@ -252,6 +253,7 @@ A release rebase on this branch is not considered complete until public dev pass
 - `gpt-5.2`
 - `gpt-5.3`
 - `gpt-5.4`
+- `gpt-5.5`
 - `gpt-image-2` through `/openai-routing/v1/responses`
 
 Current public dev endpoint used for regression:

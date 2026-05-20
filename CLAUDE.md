@@ -18,6 +18,7 @@ Primary focus:
 - `gpt-5.2`
 - `gpt-5.3`
 - `gpt-5.4`
+- `gpt-5.5`
 - `gpt-image-2`
 
 Primary endpoint family:
@@ -119,6 +120,7 @@ Public dev E2E that should pass after rebases:
 - `gpt-5.2`
 - `gpt-5.3`
 - `gpt-5.4`
+- `gpt-5.5`
 - `gpt-image-2`
 
 Public dev base URL:
