@@ -115,7 +115,7 @@ GOCACHE=/tmp/sub2api-go-cache go test ./internal/service ./internal/handler ./in
 GOCACHE=/tmp/sub2api-go-cache go test ./cmd/openai-oauth-client -count=1
 ```
 
-Public dev E2E that should pass after rebases:
+Local current-branch E2E that should pass after rebases:
 
 - `gpt-5.2`
 - `gpt-5.3`
@@ -123,7 +123,11 @@ Public dev E2E that should pass after rebases:
 - `gpt-5.5`
 - `gpt-image-2`
 
-Public dev base URL:
+Local base URL:
+
+- `http://127.0.0.1:8080`
+
+Public dev is for post-image-deploy regression only:
 
 - `https://dev-sub2api.frai.pro`
 

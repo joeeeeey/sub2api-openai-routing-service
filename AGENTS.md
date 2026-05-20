@@ -284,14 +284,14 @@ The minimum acceptance bar is:
 - `python3 -m py_compile` for changed scripts under `tools/`
 - `cd backend && GOCACHE=/tmp/sub2api-go-cache go test ./internal/service ./internal/handler ./internal/server/routes -count=1`
 - `cd backend && GOCACHE=/tmp/sub2api-go-cache go test ./cmd/openai-oauth-client -count=1`
-- Public dev E2E against `https://dev-sub2api.frai.pro/openai-routing/v1/responses` for:
+- Local current-branch E2E against `http://127.0.0.1:8080/openai-routing/v1/responses` for:
   - `gpt-5.2`
   - `gpt-5.3`
   - `gpt-5.4`
   - `gpt-5.5`
   - `gpt-image-2` via `tools[].type=image_generation`
 
-### Public Dev E2E Expectations
+### Local Current-Branch E2E Expectations
 
 For this branch, a release rebase should not be treated as complete until the following are confirmed end-to-end:
 
@@ -299,6 +299,7 @@ For this branch, a release rebase should not be treated as complete until the fo
 - `gpt-5.2`, `gpt-5.3`, `gpt-5.4`, and `gpt-5.5` each return the expected assistant text
 - image generation returns `HTTP 200`, `status=completed`, and a non-empty `image_generation_call.result`
 - at least one generated image is decoded and saved locally to verify the payload is a real image, not only JSON-shaped success
+- Public dev E2E is still required after image build/push/deploy, but it does not validate unpushed local rebase code.
 
 ## Notes For Future Agents
 

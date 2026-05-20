@@ -246,9 +246,11 @@ GOCACHE=/tmp/sub2api-go-cache go test ./internal/service ./internal/handler ./in
 GOCACHE=/tmp/sub2api-go-cache go test ./cmd/openai-oauth-client -count=1
 ```
 
-## Required Public Dev E2E
+## Required Local Current-Branch E2E
 
-A release rebase on this branch is not considered complete until public dev passes:
+A release rebase on this branch is not considered complete until the current
+local branch is started and these local E2E checks pass against
+`http://127.0.0.1:8080/openai-routing/v1/responses`:
 
 - `gpt-5.2`
 - `gpt-5.3`
@@ -256,7 +258,8 @@ A release rebase on this branch is not considered complete until public dev pass
 - `gpt-5.5`
 - `gpt-image-2` through `/openai-routing/v1/responses`
 
-Current public dev endpoint used for regression:
+Public dev is a post-image-deploy regression target, not the source of truth
+for validating an unpushed local rebase:
 
 - `https://dev-sub2api.frai.pro`
 
