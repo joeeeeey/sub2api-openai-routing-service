@@ -194,7 +194,8 @@ python3 -m py_compile \
   tools/openai_routing_loadtest_dev.py \
   tools/openai_routing_loadtest_runner.py \
   tools/openai_routing_loadtest_tui.py \
-  tools/litellm_backup_azure_ttft.py
+  tools/litellm_backup_azure_ttft.py \
+  tools/openai_routing_local_e2e.py
 ```
 
 ### Routing service image
@@ -292,6 +293,15 @@ The minimum acceptance bar is:
   - `gpt-image-2` via `tools[].type=image_generation`
 - Local current-branch E2E against `http://127.0.0.1:8080/openai-routing/v1/embeddings` for:
   - an OpenAI-compatible embeddings model such as `text-embedding-3-small`
+
+Helper:
+
+```bash
+set -a; . ./.openai-routing-service/dev.env; set +a
+python3 tools/openai_routing_local_e2e.py \
+  --api-key "$OPENAI_COMPAT_SERVICE_API_KEY" \
+  --report-file /tmp/openai-routing-local-e2e.json
+```
 
 ### Local Current-Branch E2E Expectations
 

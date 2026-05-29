@@ -124,6 +124,15 @@ Local current-branch E2E that should pass after rebases:
 - `gpt-image-2`
 - `text-embedding-3-small` or another OpenAI-compatible embeddings model through `/openai-routing/v1/embeddings`
 
+Helper:
+
+```bash
+set -a; . ./.openai-routing-service/dev.env; set +a
+python3 tools/openai_routing_local_e2e.py \
+  --api-key "$OPENAI_COMPAT_SERVICE_API_KEY" \
+  --report-file /tmp/openai-routing-local-e2e.json
+```
+
 Local base URL:
 
 - `http://127.0.0.1:8080`

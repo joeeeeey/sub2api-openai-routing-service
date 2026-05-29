@@ -142,8 +142,17 @@ func TestOpenAIImageOutputCounterDeduplicatesFinalImages(t *testing.T) {
 	counter.AddSSEData([]byte(`{"type":"response.image_generation_call.partial_image","partial_image_b64":"abc"}`))
 	counter.AddSSEData([]byte(`{"type":"response.output_item.done","item":{"id":"ig_1","type":"image_generation_call","result":"final-a","size":"1024x1024"}}`))
 	counter.AddSSEData([]byte(`{"type":"response.completed","response":{"output":[{"id":"ig_1","type":"image_generation_call","result":"final-a"},{"id":"ig_2","type":"image_generation_call","result":"final-b","size":"3840x2160"}]}}`))
-	require.Equal(t, 2, counter.Count())
+	require.Equal(t, 3, counter.Count())
 	require.Equal(t, []string{"1024x1024", "3840x2160"}, counter.Sizes())
+}
+
+func TestOpenAIImageOutputCounterDeduplicatesPartialAndFinalSameID(t *testing.T) {
+	counter := newOpenAIImageOutputCounter()
+	counter.AddSSEData([]byte(`{"type":"response.image_generation_call.partial_image","item_id":"ig_1","partial_image_b64":"final-a","size":"1024x1024"}`))
+	counter.AddSSEData([]byte(`{"type":"response.output_item.done","item":{"id":"ig_1","type":"image_generation_call","result":"final-a","size":"1024x1024"}}`))
+	counter.AddSSEData([]byte(`{"type":"response.completed","response":{"output":[{"id":"ig_1","type":"image_generation_call","result":"final-a","size":"1024x1024"}]}}`))
+	require.Equal(t, 1, counter.Count())
+	require.Equal(t, []string{"1024x1024"}, counter.Sizes())
 }
 
 func TestOpenAIImageOutputCounterCountsImagesAPIStreamShapes(t *testing.T) {

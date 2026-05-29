@@ -2380,6 +2380,42 @@ func TestHandleSSEToJSON_ReconstructsImageGenerationOutputItemDone(t *testing.T)
 	require.Equal(t, "draw a cat", gjson.Get(rec.Body.String(), "output.0.revised_prompt").String())
 }
 
+func TestHandleSSEToJSON_ReconstructsImageGenerationPartialImage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+	}
+	body := []byte(strings.Join([]string{
+		`event: response.output_item.added`,
+		`data: {"type":"response.output_item.added","item":{"id":"ig_123","type":"image_generation_call","status":"in_progress"},"output_index":0}`,
+		``,
+		`event: response.image_generation_call.partial_image`,
+		`data: {"type":"response.image_generation_call.partial_image","item_id":"ig_123","output_index":0,"partial_image_b64":"aGVsbG8=","output_format":"png","background":"opaque","size":"1024x1024","revised_prompt":"draw a cat"}`,
+		``,
+		`event: response.completed`,
+		`data: {"type":"response.completed","response":{"id":"resp_img","model":"gpt-5.4-mini","status":"completed","usage":{"input_tokens":7,"output_tokens":9,"output_tokens_details":{"image_tokens":4}}}}`,
+		``,
+	}, "\n"))
+
+	usage, err := svc.handleSSEToJSON(resp, c, body, "gpt-5.4-mini", "gpt-5.4-mini")
+	require.NoError(t, err)
+	require.NotNil(t, usage)
+	require.Equal(t, 4, usage.ImageOutputTokens)
+	require.NotContains(t, rec.Body.String(), "data:")
+	require.Equal(t, "image_generation_call", gjson.Get(rec.Body.String(), "output.0.type").String())
+	require.Equal(t, "ig_123", gjson.Get(rec.Body.String(), "output.0.id").String())
+	require.Equal(t, "completed", gjson.Get(rec.Body.String(), "output.0.status").String())
+	require.Equal(t, "aGVsbG8=", gjson.Get(rec.Body.String(), "output.0.result").String())
+	require.Equal(t, "draw a cat", gjson.Get(rec.Body.String(), "output.0.revised_prompt").String())
+	require.Equal(t, "png", gjson.Get(rec.Body.String(), "output.0.output_format").String())
+}
+
 func TestHandleSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

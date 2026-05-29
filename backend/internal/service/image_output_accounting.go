@@ -72,6 +72,8 @@ func (c *openAIImageOutputCounter) AddSSEData(data []byte) {
 	switch eventType {
 	case "response.output_item.done":
 		c.addImageOutputItem(root.Get("item"))
+	case "response.image_generation_call.partial_image":
+		c.addImageOutputPartial(root)
 	case "response.completed", "response.done":
 		c.addOutputArray(root.Get("response.output"))
 	case "image_generation.completed":
@@ -148,6 +150,48 @@ func (c *openAIImageOutputCounter) addImageOutputItem(item gjson.Result) {
 	key := strings.TrimSpace(item.Get("id").String())
 	if key == "" {
 		key = strings.TrimSpace(item.Get("call_id").String())
+	}
+	if key == "" {
+		key = hashOpenAIImageOutputResult(result)
+	}
+	if key == "" {
+		return
+	}
+	size := strings.TrimSpace(item.Get("size").String())
+	if _, exists := c.seen[key]; exists {
+		if size != "" && strings.TrimSpace(c.seenSizes[key]) == "" {
+			c.seenSizes[key] = size
+		}
+		return
+	}
+	if result != "" {
+		resultKey := hashOpenAIImageOutputResult(result)
+		if _, exists := c.seen[resultKey]; exists {
+			if size != "" && strings.TrimSpace(c.seenSizes[resultKey]) == "" {
+				c.seenSizes[resultKey] = size
+			}
+			return
+		}
+	}
+	c.seen[key] = struct{}{}
+	c.seenOrder = append(c.seenOrder, key)
+	if size != "" {
+		c.seenSizes[key] = size
+	}
+	c.count++
+}
+
+func (c *openAIImageOutputCounter) addImageOutputPartial(item gjson.Result) {
+	if !item.Exists() || !item.IsObject() {
+		return
+	}
+	result := strings.TrimSpace(item.Get("partial_image_b64").String())
+	if result == "" {
+		return
+	}
+	key := strings.TrimSpace(item.Get("item_id").String())
+	if key == "" {
+		key = strings.TrimSpace(item.Get("output_index").String())
 	}
 	if key == "" {
 		key = hashOpenAIImageOutputResult(result)

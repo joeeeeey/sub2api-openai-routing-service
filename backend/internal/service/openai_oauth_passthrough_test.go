@@ -548,6 +548,75 @@ func TestOpenAIGatewayService_OAuthPassthrough_DisabledUsesLegacyTransform(t *te
 	require.Contains(t, string(upstream.lastBody), `"stream":true`)
 }
 
+func TestOpenAIGatewayService_OAuthLegacy_NonStreamingImageSSEPartialReturnsJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+	groupID := int64(4242)
+	c.Set("api_key", &APIKey{
+		ID:      2424,
+		GroupID: &groupID,
+		Group: &Group{
+			ID:                   groupID,
+			AllowImageGeneration: true,
+			RateMultiplier:       1,
+			ImageRateMultiplier:  1,
+		},
+	})
+
+	originalBody := []byte(`{"model":"gpt-5.4-mini","stream":false,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"draw"}]}],"tool_choice":{"type":"image_generation"},"tools":[{"type":"image_generation","model":"gpt-image-2","size":"1024x1024","output_format":"png"}]}`)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_image_partial"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`event: response.output_item.added`,
+			`data: {"type":"response.output_item.added","item":{"id":"ig_123","type":"image_generation_call","status":"in_progress"},"output_index":0}`,
+			``,
+			`event: response.image_generation_call.partial_image`,
+			`data: {"type":"response.image_generation_call.partial_image","item_id":"ig_123","output_index":0,"partial_image_b64":"aGVsbG8=","output_format":"png","revised_prompt":"draw a cat","size":"1024x1024"}`,
+			``,
+			`event: response.completed`,
+			`data: {"type":"response.completed","response":{"id":"resp_img","object":"response","model":"gpt-5.4-mini-2026-03-17","status":"completed","usage":{"input_tokens":7,"output_tokens":9,"output_tokens_details":{"image_tokens":4}}}}`,
+			``,
+		}, "\n"))),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Extra:          map[string]any{"openai_passthrough": false, "openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModeOff},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEqual(t, originalBody, upstream.lastBody)
+	require.Contains(t, string(upstream.lastBody), `"stream":true`)
+	require.NotContains(t, rec.Body.String(), "event:")
+	require.NotContains(t, rec.Body.String(), "data:")
+	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	require.Equal(t, "completed", gjson.Get(rec.Body.String(), "status").String())
+	require.Equal(t, "image_generation_call", gjson.Get(rec.Body.String(), "output.0.type").String())
+	require.Equal(t, "aGVsbG8=", gjson.Get(rec.Body.String(), "output.0.result").String())
+	require.Equal(t, "draw a cat", gjson.Get(rec.Body.String(), "output.0.revised_prompt").String())
+	require.Equal(t, 1, result.ImageCount)
+}
+
 func TestOpenAIGatewayService_OAuthLegacy_UpstreamRequestIgnoresClientCancel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

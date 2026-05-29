@@ -4085,6 +4085,7 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 			contentType = "text/event-stream"
 		}
 	}
+	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
 
 	return &openaiNonStreamingResultPassthrough{
@@ -5233,6 +5234,7 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 			contentType = "text/event-stream"
 		}
 	}
+	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
 
 	return &openaiNonStreamingResult{
@@ -5318,15 +5320,31 @@ func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
 	acc := apicompat.NewBufferedResponseAccumulator()
 	imageOutputs := make([]json.RawMessage, 0, 1)
 	seenImages := make(map[string]struct{})
+	partialImageOutputs := make(map[string]json.RawMessage)
+	partialImageOrder := make([]string, 0, 1)
 	forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
 		if imageOutput, ok := extractImageGenerationOutputFromSSEData(data, seenImages); ok {
 			imageOutputs = append(imageOutputs, imageOutput)
+		}
+		if imageOutput, key, ok := extractImageGenerationPartialOutputFromSSEData(data); ok {
+			if _, exists := partialImageOutputs[key]; !exists {
+				partialImageOrder = append(partialImageOrder, key)
+			}
+			partialImageOutputs[key] = imageOutput
 		}
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal(data, &event); err == nil {
 			acc.ProcessEvent(&event)
 		}
 	})
+	for _, key := range partialImageOrder {
+		if _, exists := seenImages[key]; exists {
+			continue
+		}
+		if imageOutput := partialImageOutputs[key]; len(imageOutput) > 0 {
+			imageOutputs = append(imageOutputs, imageOutput)
+		}
+	}
 	if !acc.HasContent() && len(imageOutputs) == 0 {
 		return nil, false
 	}
@@ -5468,6 +5486,45 @@ func extractImageGenerationOutputFromSSEData(data []byte, seen map[string]struct
 		seen[key] = struct{}{}
 	}
 	return json.RawMessage(item.Raw), true
+}
+
+func extractImageGenerationPartialOutputFromSSEData(data []byte) (json.RawMessage, string, bool) {
+	if len(data) == 0 || !gjson.ValidBytes(data) {
+		return nil, "", false
+	}
+	if gjson.GetBytes(data, "type").String() != "response.image_generation_call.partial_image" {
+		return nil, "", false
+	}
+	result := strings.TrimSpace(gjson.GetBytes(data, "partial_image_b64").String())
+	if result == "" {
+		return nil, "", false
+	}
+	key := strings.TrimSpace(gjson.GetBytes(data, "item_id").String())
+	if key == "" {
+		key = strings.TrimSpace(gjson.GetBytes(data, "output_index").String())
+	}
+	if key == "" {
+		key = strings.TrimSpace(gjson.GetBytes(data, "output_format").String()) + "|" + result
+	}
+
+	item := map[string]any{
+		"type":   "image_generation_call",
+		"status": "completed",
+		"result": result,
+	}
+	if id := strings.TrimSpace(gjson.GetBytes(data, "item_id").String()); id != "" {
+		item["id"] = id
+	}
+	for _, field := range []string{"revised_prompt", "output_format", "background", "size"} {
+		if value := strings.TrimSpace(gjson.GetBytes(data, field).String()); value != "" {
+			item[field] = value
+		}
+	}
+	raw, err := json.Marshal(item)
+	if err != nil {
+		return nil, "", false
+	}
+	return json.RawMessage(raw), key, true
 }
 
 func (s *OpenAIGatewayService) parseSSEUsageFromBody(body string) *OpenAIUsage {
