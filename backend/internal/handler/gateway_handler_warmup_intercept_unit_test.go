@@ -34,7 +34,12 @@ func (f *fakeSchedulerCache) GetSnapshot(_ context.Context, _ service.SchedulerB
 func (f *fakeSchedulerCache) SetSnapshot(_ context.Context, _ service.SchedulerBucket, _ []service.Account) error {
 	return nil
 }
-func (f *fakeSchedulerCache) GetAccount(_ context.Context, _ int64) (*service.Account, error) {
+func (f *fakeSchedulerCache) GetAccount(_ context.Context, id int64) (*service.Account, error) {
+	for _, account := range f.accounts {
+		if account != nil && account.ID == id {
+			return account, nil
+		}
+	}
 	return nil, nil
 }
 func (f *fakeSchedulerCache) SetAccount(_ context.Context, _ *service.Account) error { return nil }
@@ -44,6 +49,9 @@ func (f *fakeSchedulerCache) UpdateLastUsed(_ context.Context, _ map[int64]time.
 }
 func (f *fakeSchedulerCache) TryLockBucket(_ context.Context, _ service.SchedulerBucket, _ time.Duration) (bool, error) {
 	return true, nil
+}
+func (f *fakeSchedulerCache) UnlockBucket(_ context.Context, _ service.SchedulerBucket) error {
+	return nil
 }
 func (f *fakeSchedulerCache) ListBuckets(_ context.Context) ([]service.SchedulerBucket, error) {
 	return nil, nil
@@ -75,8 +83,10 @@ func (f *fakeGroupRepo) ListActive(context.Context) ([]service.Group, error) { r
 func (f *fakeGroupRepo) ListActiveByPlatform(context.Context, string) ([]service.Group, error) {
 	return nil, nil
 }
-func (f *fakeGroupRepo) ExistsByName(context.Context, string) (bool, error)    { return false, nil }
-func (f *fakeGroupRepo) GetAccountCount(context.Context, int64) (int64, int64, error) { return 0, 0, nil }
+func (f *fakeGroupRepo) ExistsByName(context.Context, string) (bool, error) { return false, nil }
+func (f *fakeGroupRepo) GetAccountCount(context.Context, int64) (int64, int64, error) {
+	return 0, 0, nil
+}
 func (f *fakeGroupRepo) DeleteAccountGroupsByGroupID(context.Context, int64) (int64, error) {
 	return 0, nil
 }
@@ -158,11 +168,16 @@ func newTestGatewayHandler(t *testing.T, group *service.Group, accounts []*servi
 		nil, // rpmCache
 		nil, // digestStore
 		nil, // settingService
+		nil, // tlsFPProfileService
+		nil, // channelService
+		nil, // resolver
+		nil, // balanceNotifyService
+		nil, // userPlatformQuotaRepo
 	)
 
 	// RunModeSimple：跳过计费检查，避免引入 repo/cache 依赖。
 	cfg := &config.Config{RunMode: config.RunModeSimple}
-	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
+	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
 
 	concurrencySvc := service.NewConcurrencyService(&fakeConcurrencyCache{})
 	concurrencyHelper := NewConcurrencyHelper(concurrencySvc, SSEPingFormatClaude, 0)

@@ -85,6 +85,62 @@ func (_c *UsageLogCreate) SetNillableUpstreamModel(v *string) *UsageLogCreate {
 	return _c
 }
 
+// SetChannelID sets the "channel_id" field.
+func (_c *UsageLogCreate) SetChannelID(v int64) *UsageLogCreate {
+	_c.mutation.SetChannelID(v)
+	return _c
+}
+
+// SetNillableChannelID sets the "channel_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableChannelID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetChannelID(*v)
+	}
+	return _c
+}
+
+// SetModelMappingChain sets the "model_mapping_chain" field.
+func (_c *UsageLogCreate) SetModelMappingChain(v string) *UsageLogCreate {
+	_c.mutation.SetModelMappingChain(v)
+	return _c
+}
+
+// SetNillableModelMappingChain sets the "model_mapping_chain" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableModelMappingChain(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetModelMappingChain(*v)
+	}
+	return _c
+}
+
+// SetBillingTier sets the "billing_tier" field.
+func (_c *UsageLogCreate) SetBillingTier(v string) *UsageLogCreate {
+	_c.mutation.SetBillingTier(v)
+	return _c
+}
+
+// SetNillableBillingTier sets the "billing_tier" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableBillingTier(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetBillingTier(*v)
+	}
+	return _c
+}
+
+// SetBillingMode sets the "billing_mode" field.
+func (_c *UsageLogCreate) SetBillingMode(v string) *UsageLogCreate {
+	_c.mutation.SetBillingMode(v)
+	return _c
+}
+
+// SetNillableBillingMode sets the "billing_mode" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableBillingMode(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetBillingMode(*v)
+	}
+	return _c
+}
+
 // SetGroupID sets the "group_id" field.
 func (_c *UsageLogCreate) SetGroupID(v int64) *UsageLogCreate {
 	_c.mutation.SetGroupID(v)
@@ -421,17 +477,51 @@ func (_c *UsageLogCreate) SetNillableImageSize(v *string) *UsageLogCreate {
 	return _c
 }
 
-// SetMediaType sets the "media_type" field.
-func (_c *UsageLogCreate) SetMediaType(v string) *UsageLogCreate {
-	_c.mutation.SetMediaType(v)
+// SetImageInputSize sets the "image_input_size" field.
+func (_c *UsageLogCreate) SetImageInputSize(v string) *UsageLogCreate {
+	_c.mutation.SetImageInputSize(v)
 	return _c
 }
 
-// SetNillableMediaType sets the "media_type" field if the given value is not nil.
-func (_c *UsageLogCreate) SetNillableMediaType(v *string) *UsageLogCreate {
+// SetNillableImageInputSize sets the "image_input_size" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableImageInputSize(v *string) *UsageLogCreate {
 	if v != nil {
-		_c.SetMediaType(*v)
+		_c.SetImageInputSize(*v)
 	}
+	return _c
+}
+
+// SetImageOutputSize sets the "image_output_size" field.
+func (_c *UsageLogCreate) SetImageOutputSize(v string) *UsageLogCreate {
+	_c.mutation.SetImageOutputSize(v)
+	return _c
+}
+
+// SetNillableImageOutputSize sets the "image_output_size" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableImageOutputSize(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetImageOutputSize(*v)
+	}
+	return _c
+}
+
+// SetImageSizeSource sets the "image_size_source" field.
+func (_c *UsageLogCreate) SetImageSizeSource(v string) *UsageLogCreate {
+	_c.mutation.SetImageSizeSource(v)
+	return _c
+}
+
+// SetNillableImageSizeSource sets the "image_size_source" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableImageSizeSource(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetImageSizeSource(*v)
+	}
+	return _c
+}
+
+// SetImageSizeBreakdown sets the "image_size_breakdown" field.
+func (_c *UsageLogCreate) SetImageSizeBreakdown(v map[string]int) *UsageLogCreate {
+	_c.mutation.SetImageSizeBreakdown(v)
 	return _c
 }
 
@@ -634,6 +724,21 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "upstream_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.upstream_model": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.ModelMappingChain(); ok {
+		if err := usagelog.ModelMappingChainValidator(v); err != nil {
+			return &ValidationError{Name: "model_mapping_chain", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model_mapping_chain": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.BillingTier(); ok {
+		if err := usagelog.BillingTierValidator(v); err != nil {
+			return &ValidationError{Name: "billing_tier", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_tier": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.BillingMode(); ok {
+		if err := usagelog.BillingModeValidator(v); err != nil {
+			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "UsageLog.input_tokens"`)}
 	}
@@ -697,9 +802,19 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "image_size", err: fmt.Errorf(`ent: validator failed for field "UsageLog.image_size": %w`, err)}
 		}
 	}
-	if v, ok := _c.mutation.MediaType(); ok {
-		if err := usagelog.MediaTypeValidator(v); err != nil {
-			return &ValidationError{Name: "media_type", err: fmt.Errorf(`ent: validator failed for field "UsageLog.media_type": %w`, err)}
+	if v, ok := _c.mutation.ImageInputSize(); ok {
+		if err := usagelog.ImageInputSizeValidator(v); err != nil {
+			return &ValidationError{Name: "image_input_size", err: fmt.Errorf(`ent: validator failed for field "UsageLog.image_input_size": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.ImageOutputSize(); ok {
+		if err := usagelog.ImageOutputSizeValidator(v); err != nil {
+			return &ValidationError{Name: "image_output_size", err: fmt.Errorf(`ent: validator failed for field "UsageLog.image_output_size": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.ImageSizeSource(); ok {
+		if err := usagelog.ImageSizeSourceValidator(v); err != nil {
+			return &ValidationError{Name: "image_size_source", err: fmt.Errorf(`ent: validator failed for field "UsageLog.image_size_source": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CacheTTLOverridden(); !ok {
@@ -759,6 +874,22 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpstreamModel(); ok {
 		_spec.SetField(usagelog.FieldUpstreamModel, field.TypeString, value)
 		_node.UpstreamModel = &value
+	}
+	if value, ok := _c.mutation.ChannelID(); ok {
+		_spec.SetField(usagelog.FieldChannelID, field.TypeInt64, value)
+		_node.ChannelID = &value
+	}
+	if value, ok := _c.mutation.ModelMappingChain(); ok {
+		_spec.SetField(usagelog.FieldModelMappingChain, field.TypeString, value)
+		_node.ModelMappingChain = &value
+	}
+	if value, ok := _c.mutation.BillingTier(); ok {
+		_spec.SetField(usagelog.FieldBillingTier, field.TypeString, value)
+		_node.BillingTier = &value
+	}
+	if value, ok := _c.mutation.BillingMode(); ok {
+		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
+		_node.BillingMode = &value
 	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -848,9 +979,21 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldImageSize, field.TypeString, value)
 		_node.ImageSize = &value
 	}
-	if value, ok := _c.mutation.MediaType(); ok {
-		_spec.SetField(usagelog.FieldMediaType, field.TypeString, value)
-		_node.MediaType = &value
+	if value, ok := _c.mutation.ImageInputSize(); ok {
+		_spec.SetField(usagelog.FieldImageInputSize, field.TypeString, value)
+		_node.ImageInputSize = &value
+	}
+	if value, ok := _c.mutation.ImageOutputSize(); ok {
+		_spec.SetField(usagelog.FieldImageOutputSize, field.TypeString, value)
+		_node.ImageOutputSize = &value
+	}
+	if value, ok := _c.mutation.ImageSizeSource(); ok {
+		_spec.SetField(usagelog.FieldImageSizeSource, field.TypeString, value)
+		_node.ImageSizeSource = &value
+	}
+	if value, ok := _c.mutation.ImageSizeBreakdown(); ok {
+		_spec.SetField(usagelog.FieldImageSizeBreakdown, field.TypeJSON, value)
+		_node.ImageSizeBreakdown = value
 	}
 	if value, ok := _c.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)
@@ -1090,6 +1233,84 @@ func (u *UsageLogUpsert) UpdateUpstreamModel() *UsageLogUpsert {
 // ClearUpstreamModel clears the value of the "upstream_model" field.
 func (u *UsageLogUpsert) ClearUpstreamModel() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldUpstreamModel)
+	return u
+}
+
+// SetChannelID sets the "channel_id" field.
+func (u *UsageLogUpsert) SetChannelID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldChannelID, v)
+	return u
+}
+
+// UpdateChannelID sets the "channel_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateChannelID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldChannelID)
+	return u
+}
+
+// AddChannelID adds v to the "channel_id" field.
+func (u *UsageLogUpsert) AddChannelID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldChannelID, v)
+	return u
+}
+
+// ClearChannelID clears the value of the "channel_id" field.
+func (u *UsageLogUpsert) ClearChannelID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldChannelID)
+	return u
+}
+
+// SetModelMappingChain sets the "model_mapping_chain" field.
+func (u *UsageLogUpsert) SetModelMappingChain(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldModelMappingChain, v)
+	return u
+}
+
+// UpdateModelMappingChain sets the "model_mapping_chain" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateModelMappingChain() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldModelMappingChain)
+	return u
+}
+
+// ClearModelMappingChain clears the value of the "model_mapping_chain" field.
+func (u *UsageLogUpsert) ClearModelMappingChain() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldModelMappingChain)
+	return u
+}
+
+// SetBillingTier sets the "billing_tier" field.
+func (u *UsageLogUpsert) SetBillingTier(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldBillingTier, v)
+	return u
+}
+
+// UpdateBillingTier sets the "billing_tier" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateBillingTier() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldBillingTier)
+	return u
+}
+
+// ClearBillingTier clears the value of the "billing_tier" field.
+func (u *UsageLogUpsert) ClearBillingTier() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldBillingTier)
+	return u
+}
+
+// SetBillingMode sets the "billing_mode" field.
+func (u *UsageLogUpsert) SetBillingMode(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldBillingMode, v)
+	return u
+}
+
+// UpdateBillingMode sets the "billing_mode" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateBillingMode() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldBillingMode)
+	return u
+}
+
+// ClearBillingMode clears the value of the "billing_mode" field.
+func (u *UsageLogUpsert) ClearBillingMode() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldBillingMode)
 	return u
 }
 
@@ -1537,21 +1758,75 @@ func (u *UsageLogUpsert) ClearImageSize() *UsageLogUpsert {
 	return u
 }
 
-// SetMediaType sets the "media_type" field.
-func (u *UsageLogUpsert) SetMediaType(v string) *UsageLogUpsert {
-	u.Set(usagelog.FieldMediaType, v)
+// SetImageInputSize sets the "image_input_size" field.
+func (u *UsageLogUpsert) SetImageInputSize(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldImageInputSize, v)
 	return u
 }
 
-// UpdateMediaType sets the "media_type" field to the value that was provided on create.
-func (u *UsageLogUpsert) UpdateMediaType() *UsageLogUpsert {
-	u.SetExcluded(usagelog.FieldMediaType)
+// UpdateImageInputSize sets the "image_input_size" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateImageInputSize() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldImageInputSize)
 	return u
 }
 
-// ClearMediaType clears the value of the "media_type" field.
-func (u *UsageLogUpsert) ClearMediaType() *UsageLogUpsert {
-	u.SetNull(usagelog.FieldMediaType)
+// ClearImageInputSize clears the value of the "image_input_size" field.
+func (u *UsageLogUpsert) ClearImageInputSize() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldImageInputSize)
+	return u
+}
+
+// SetImageOutputSize sets the "image_output_size" field.
+func (u *UsageLogUpsert) SetImageOutputSize(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldImageOutputSize, v)
+	return u
+}
+
+// UpdateImageOutputSize sets the "image_output_size" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateImageOutputSize() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldImageOutputSize)
+	return u
+}
+
+// ClearImageOutputSize clears the value of the "image_output_size" field.
+func (u *UsageLogUpsert) ClearImageOutputSize() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldImageOutputSize)
+	return u
+}
+
+// SetImageSizeSource sets the "image_size_source" field.
+func (u *UsageLogUpsert) SetImageSizeSource(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldImageSizeSource, v)
+	return u
+}
+
+// UpdateImageSizeSource sets the "image_size_source" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateImageSizeSource() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldImageSizeSource)
+	return u
+}
+
+// ClearImageSizeSource clears the value of the "image_size_source" field.
+func (u *UsageLogUpsert) ClearImageSizeSource() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldImageSizeSource)
+	return u
+}
+
+// SetImageSizeBreakdown sets the "image_size_breakdown" field.
+func (u *UsageLogUpsert) SetImageSizeBreakdown(v map[string]int) *UsageLogUpsert {
+	u.Set(usagelog.FieldImageSizeBreakdown, v)
+	return u
+}
+
+// UpdateImageSizeBreakdown sets the "image_size_breakdown" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateImageSizeBreakdown() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldImageSizeBreakdown)
+	return u
+}
+
+// ClearImageSizeBreakdown clears the value of the "image_size_breakdown" field.
+func (u *UsageLogUpsert) ClearImageSizeBreakdown() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldImageSizeBreakdown)
 	return u
 }
 
@@ -1721,6 +1996,97 @@ func (u *UsageLogUpsertOne) UpdateUpstreamModel() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearUpstreamModel() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearUpstreamModel()
+	})
+}
+
+// SetChannelID sets the "channel_id" field.
+func (u *UsageLogUpsertOne) SetChannelID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetChannelID(v)
+	})
+}
+
+// AddChannelID adds v to the "channel_id" field.
+func (u *UsageLogUpsertOne) AddChannelID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddChannelID(v)
+	})
+}
+
+// UpdateChannelID sets the "channel_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateChannelID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateChannelID()
+	})
+}
+
+// ClearChannelID clears the value of the "channel_id" field.
+func (u *UsageLogUpsertOne) ClearChannelID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearChannelID()
+	})
+}
+
+// SetModelMappingChain sets the "model_mapping_chain" field.
+func (u *UsageLogUpsertOne) SetModelMappingChain(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetModelMappingChain(v)
+	})
+}
+
+// UpdateModelMappingChain sets the "model_mapping_chain" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateModelMappingChain() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateModelMappingChain()
+	})
+}
+
+// ClearModelMappingChain clears the value of the "model_mapping_chain" field.
+func (u *UsageLogUpsertOne) ClearModelMappingChain() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearModelMappingChain()
+	})
+}
+
+// SetBillingTier sets the "billing_tier" field.
+func (u *UsageLogUpsertOne) SetBillingTier(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBillingTier(v)
+	})
+}
+
+// UpdateBillingTier sets the "billing_tier" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateBillingTier() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBillingTier()
+	})
+}
+
+// ClearBillingTier clears the value of the "billing_tier" field.
+func (u *UsageLogUpsertOne) ClearBillingTier() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBillingTier()
+	})
+}
+
+// SetBillingMode sets the "billing_mode" field.
+func (u *UsageLogUpsertOne) SetBillingMode(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBillingMode(v)
+	})
+}
+
+// UpdateBillingMode sets the "billing_mode" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateBillingMode() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBillingMode()
+	})
+}
+
+// ClearBillingMode clears the value of the "billing_mode" field.
+func (u *UsageLogUpsertOne) ClearBillingMode() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBillingMode()
 	})
 }
 
@@ -2242,24 +2608,87 @@ func (u *UsageLogUpsertOne) ClearImageSize() *UsageLogUpsertOne {
 	})
 }
 
-// SetMediaType sets the "media_type" field.
-func (u *UsageLogUpsertOne) SetMediaType(v string) *UsageLogUpsertOne {
+// SetImageInputSize sets the "image_input_size" field.
+func (u *UsageLogUpsertOne) SetImageInputSize(v string) *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
-		s.SetMediaType(v)
+		s.SetImageInputSize(v)
 	})
 }
 
-// UpdateMediaType sets the "media_type" field to the value that was provided on create.
-func (u *UsageLogUpsertOne) UpdateMediaType() *UsageLogUpsertOne {
+// UpdateImageInputSize sets the "image_input_size" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateImageInputSize() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
-		s.UpdateMediaType()
+		s.UpdateImageInputSize()
 	})
 }
 
-// ClearMediaType clears the value of the "media_type" field.
-func (u *UsageLogUpsertOne) ClearMediaType() *UsageLogUpsertOne {
+// ClearImageInputSize clears the value of the "image_input_size" field.
+func (u *UsageLogUpsertOne) ClearImageInputSize() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
-		s.ClearMediaType()
+		s.ClearImageInputSize()
+	})
+}
+
+// SetImageOutputSize sets the "image_output_size" field.
+func (u *UsageLogUpsertOne) SetImageOutputSize(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetImageOutputSize(v)
+	})
+}
+
+// UpdateImageOutputSize sets the "image_output_size" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateImageOutputSize() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateImageOutputSize()
+	})
+}
+
+// ClearImageOutputSize clears the value of the "image_output_size" field.
+func (u *UsageLogUpsertOne) ClearImageOutputSize() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearImageOutputSize()
+	})
+}
+
+// SetImageSizeSource sets the "image_size_source" field.
+func (u *UsageLogUpsertOne) SetImageSizeSource(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetImageSizeSource(v)
+	})
+}
+
+// UpdateImageSizeSource sets the "image_size_source" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateImageSizeSource() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateImageSizeSource()
+	})
+}
+
+// ClearImageSizeSource clears the value of the "image_size_source" field.
+func (u *UsageLogUpsertOne) ClearImageSizeSource() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearImageSizeSource()
+	})
+}
+
+// SetImageSizeBreakdown sets the "image_size_breakdown" field.
+func (u *UsageLogUpsertOne) SetImageSizeBreakdown(v map[string]int) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetImageSizeBreakdown(v)
+	})
+}
+
+// UpdateImageSizeBreakdown sets the "image_size_breakdown" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateImageSizeBreakdown() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateImageSizeBreakdown()
+	})
+}
+
+// ClearImageSizeBreakdown clears the value of the "image_size_breakdown" field.
+func (u *UsageLogUpsertOne) ClearImageSizeBreakdown() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearImageSizeBreakdown()
 	})
 }
 
@@ -2597,6 +3026,97 @@ func (u *UsageLogUpsertBulk) UpdateUpstreamModel() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearUpstreamModel() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearUpstreamModel()
+	})
+}
+
+// SetChannelID sets the "channel_id" field.
+func (u *UsageLogUpsertBulk) SetChannelID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetChannelID(v)
+	})
+}
+
+// AddChannelID adds v to the "channel_id" field.
+func (u *UsageLogUpsertBulk) AddChannelID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddChannelID(v)
+	})
+}
+
+// UpdateChannelID sets the "channel_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateChannelID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateChannelID()
+	})
+}
+
+// ClearChannelID clears the value of the "channel_id" field.
+func (u *UsageLogUpsertBulk) ClearChannelID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearChannelID()
+	})
+}
+
+// SetModelMappingChain sets the "model_mapping_chain" field.
+func (u *UsageLogUpsertBulk) SetModelMappingChain(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetModelMappingChain(v)
+	})
+}
+
+// UpdateModelMappingChain sets the "model_mapping_chain" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateModelMappingChain() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateModelMappingChain()
+	})
+}
+
+// ClearModelMappingChain clears the value of the "model_mapping_chain" field.
+func (u *UsageLogUpsertBulk) ClearModelMappingChain() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearModelMappingChain()
+	})
+}
+
+// SetBillingTier sets the "billing_tier" field.
+func (u *UsageLogUpsertBulk) SetBillingTier(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBillingTier(v)
+	})
+}
+
+// UpdateBillingTier sets the "billing_tier" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateBillingTier() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBillingTier()
+	})
+}
+
+// ClearBillingTier clears the value of the "billing_tier" field.
+func (u *UsageLogUpsertBulk) ClearBillingTier() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBillingTier()
+	})
+}
+
+// SetBillingMode sets the "billing_mode" field.
+func (u *UsageLogUpsertBulk) SetBillingMode(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBillingMode(v)
+	})
+}
+
+// UpdateBillingMode sets the "billing_mode" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateBillingMode() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBillingMode()
+	})
+}
+
+// ClearBillingMode clears the value of the "billing_mode" field.
+func (u *UsageLogUpsertBulk) ClearBillingMode() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBillingMode()
 	})
 }
 
@@ -3118,24 +3638,87 @@ func (u *UsageLogUpsertBulk) ClearImageSize() *UsageLogUpsertBulk {
 	})
 }
 
-// SetMediaType sets the "media_type" field.
-func (u *UsageLogUpsertBulk) SetMediaType(v string) *UsageLogUpsertBulk {
+// SetImageInputSize sets the "image_input_size" field.
+func (u *UsageLogUpsertBulk) SetImageInputSize(v string) *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
-		s.SetMediaType(v)
+		s.SetImageInputSize(v)
 	})
 }
 
-// UpdateMediaType sets the "media_type" field to the value that was provided on create.
-func (u *UsageLogUpsertBulk) UpdateMediaType() *UsageLogUpsertBulk {
+// UpdateImageInputSize sets the "image_input_size" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateImageInputSize() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
-		s.UpdateMediaType()
+		s.UpdateImageInputSize()
 	})
 }
 
-// ClearMediaType clears the value of the "media_type" field.
-func (u *UsageLogUpsertBulk) ClearMediaType() *UsageLogUpsertBulk {
+// ClearImageInputSize clears the value of the "image_input_size" field.
+func (u *UsageLogUpsertBulk) ClearImageInputSize() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
-		s.ClearMediaType()
+		s.ClearImageInputSize()
+	})
+}
+
+// SetImageOutputSize sets the "image_output_size" field.
+func (u *UsageLogUpsertBulk) SetImageOutputSize(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetImageOutputSize(v)
+	})
+}
+
+// UpdateImageOutputSize sets the "image_output_size" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateImageOutputSize() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateImageOutputSize()
+	})
+}
+
+// ClearImageOutputSize clears the value of the "image_output_size" field.
+func (u *UsageLogUpsertBulk) ClearImageOutputSize() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearImageOutputSize()
+	})
+}
+
+// SetImageSizeSource sets the "image_size_source" field.
+func (u *UsageLogUpsertBulk) SetImageSizeSource(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetImageSizeSource(v)
+	})
+}
+
+// UpdateImageSizeSource sets the "image_size_source" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateImageSizeSource() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateImageSizeSource()
+	})
+}
+
+// ClearImageSizeSource clears the value of the "image_size_source" field.
+func (u *UsageLogUpsertBulk) ClearImageSizeSource() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearImageSizeSource()
+	})
+}
+
+// SetImageSizeBreakdown sets the "image_size_breakdown" field.
+func (u *UsageLogUpsertBulk) SetImageSizeBreakdown(v map[string]int) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetImageSizeBreakdown(v)
+	})
+}
+
+// UpdateImageSizeBreakdown sets the "image_size_breakdown" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateImageSizeBreakdown() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateImageSizeBreakdown()
+	})
+}
+
+// ClearImageSizeBreakdown clears the value of the "image_size_breakdown" field.
+func (u *UsageLogUpsertBulk) ClearImageSizeBreakdown() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearImageSizeBreakdown()
 	})
 }
 

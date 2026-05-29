@@ -546,9 +546,14 @@ func (h *DashboardHandler) GetBatchUsersUsage(c *gin.Context) {
 		return
 	}
 
+	// cacheKey 必须包含当日日期，否则跨午夜后 30s 内会复用昨天的 "today_*" 结果。
 	keyRaw, _ := json.Marshal(struct {
+		V       int     `json:"v"`
+		Day     string  `json:"day"`
 		UserIDs []int64 `json:"user_ids"`
 	}{
+		V:       2, // bump 当响应结构变化（如加入 by_platform 时）
+		Day:     timezone.Today().Format("2006-01-02"),
 		UserIDs: userIDs,
 	})
 	cacheKey := string(keyRaw)
@@ -635,6 +640,40 @@ func (h *DashboardHandler) GetUserBreakdown(c *gin.Context) {
 	dim.ModelType = rawModelSource
 	dim.Endpoint = c.Query("endpoint")
 	dim.EndpointType = c.DefaultQuery("endpoint_type", "inbound")
+
+	// Additional filter conditions
+	if v := c.Query("user_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.UserID = id
+		}
+	}
+	if v := c.Query("api_key_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.APIKeyID = id
+		}
+	}
+	if v := c.Query("account_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.AccountID = id
+		}
+	}
+	if v := c.Query("request_type"); v != "" {
+		if rt, err := strconv.ParseInt(v, 10, 16); err == nil {
+			rtVal := int16(rt)
+			dim.RequestType = &rtVal
+		}
+	}
+	if v := c.Query("stream"); v != "" {
+		if s, err := strconv.ParseBool(v); err == nil {
+			dim.Stream = &s
+		}
+	}
+	if v := c.Query("billing_type"); v != "" {
+		if bt, err := strconv.ParseInt(v, 10, 8); err == nil {
+			btVal := int8(bt)
+			dim.BillingType = &btVal
+		}
+	}
 
 	limit := 50
 	if v := c.Query("limit"); v != "" {

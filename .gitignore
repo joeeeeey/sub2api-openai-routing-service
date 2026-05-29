@@ -1,4 +1,5 @@
 docs/claude-relay-service/
+.codex
 
 # ===================
 # Go 后端
@@ -32,6 +33,7 @@ backend/.gocache/
 # ===================
 node_modules/
 frontend/node_modules/
+frontend/.pnpm-store/
 frontend/dist/
 *.local
 *.tsbuildinfo
@@ -116,20 +118,45 @@ backend/.installed
 # ===================
 tests
 CLAUDE.md
+!CLAUDE.md
 .claude
 scripts
+!scripts/
+scripts/*
+!scripts/openai-oauth-client.sh
 .code-review-state
 #openspec/
 code-reviews/
-#AGENTS.md
+AGENTS.md
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/PAYMENT.md
+!docs/PAYMENT_CN.md
+!docs/ADMIN_PAYMENT_INTEGRATION_API.md
+!docs/PRD_OPENAI_OAUTH_LOCAL_SERVER.md
+!docs/REQUIREMENTS_SUB2API_OPENAI_ROUTING_SERVICE.md
+!docs/SOLUTION_RESEARCH_SUB2API_OPENAI_ROUTING_SERVICE.md
+!docs/DESIGN_PRD_SUB2API_LITELLM_OPENAI_ROUTING_SERVICE.md
+!docs/DESIGN_CLAUDECODE_REWRITE_INTEGRATION.md
+!docs/SOP_SUB2API_OPENAI_ROUTING_SERVICE_MAINTENANCE.md
+.loadtest-reports/
+!docs/RUNBOOK_SUB2API_OPENAI_ROUTING_LOAD_TEST.md
+!docs/RUNBOOK_SUB2API_OPENAI_RESPONSES_IMAGE_GENERATION.md
+!docs/RUNBOOK_SUB2API_OPENAI_ROUTING_LOAD_TEST_TUI.md
+!docs/RUNBOOK_LITELLM_BACKUP_AZURE_TTFT.md
+!docs/CHANGELOG_OPENAI_ROUTING_V0117_REBASE.md
+tools/__pycache__/
 .serena/
 .codex/
+.openai-oauth-client/
+.openai-routing-service/
+deploy/routing_postgres_data/
+deploy/routing_redis_data/
+backend/openai-oauth-client
+backend/internal/web/dist/
 frontend/coverage/
 aicodex
 output/
-

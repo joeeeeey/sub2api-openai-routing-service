@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -80,19 +81,7 @@ func ResponsesToChatCompletions(resp *ResponsesResponse, model string) *ChatComp
 		FinishReason: finishReason,
 	}}
 
-	if resp.Usage != nil {
-		usage := &ChatUsage{
-			PromptTokens:     resp.Usage.InputTokens,
-			CompletionTokens: resp.Usage.OutputTokens,
-			TotalTokens:      resp.Usage.InputTokens + resp.Usage.OutputTokens,
-		}
-		if resp.Usage.InputTokensDetails != nil && resp.Usage.InputTokensDetails.CachedTokens > 0 {
-			usage.PromptTokensDetails = &ChatTokenDetails{
-				CachedTokens: resp.Usage.InputTokensDetails.CachedTokens,
-			}
-		}
-		out.Usage = usage
-	}
+	out.Usage = chatUsageFromResponsesUsage(resp.Usage)
 
 	return out
 }
@@ -159,7 +148,9 @@ func ResponsesEventToChatChunks(evt *ResponsesStreamEvent, state *ResponsesEvent
 		return resToChatHandleReasoningDelta(evt, state)
 	case "response.reasoning_summary_text.done":
 		return nil
-	case "response.completed", "response.incomplete", "response.failed":
+	// response.done 是 Realtime/WS 与项目透传路径使用的终止别名；
+	// 普通 Responses HTTP SSE 的公开终止事件仍以 response.completed 为主。
+	case "response.completed", "response.done", "response.incomplete", "response.failed":
 		return resToChatHandleCompleted(evt, state)
 	default:
 		return nil
@@ -290,20 +281,12 @@ func resToChatHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 	state.Finalized = true
 	finishReason := "stop"
 
+	if evt.Usage != nil {
+		state.Usage = chatUsageFromResponsesUsage(evt.Usage)
+	}
 	if evt.Response != nil {
 		if evt.Response.Usage != nil {
-			u := evt.Response.Usage
-			usage := &ChatUsage{
-				PromptTokens:     u.InputTokens,
-				CompletionTokens: u.OutputTokens,
-				TotalTokens:      u.InputTokens + u.OutputTokens,
-			}
-			if u.InputTokensDetails != nil && u.InputTokensDetails.CachedTokens > 0 {
-				usage.PromptTokensDetails = &ChatTokenDetails{
-					CachedTokens: u.InputTokensDetails.CachedTokens,
-				}
-			}
-			state.Usage = usage
+			state.Usage = chatUsageFromResponsesUsage(evt.Response.Usage)
 		}
 
 		switch evt.Response.Status {
@@ -335,6 +318,57 @@ func resToChatHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 	}
 
 	return chunks
+}
+
+func chatUsageFromResponsesUsage(u *ResponsesUsage) *ChatUsage {
+	if u == nil {
+		return nil
+	}
+	usage := &ChatUsage{
+		PromptTokens:     u.InputTokens,
+		CompletionTokens: u.OutputTokens,
+		TotalTokens:      u.InputTokens + u.OutputTokens,
+	}
+	usage.PromptTokensDetails = promptDetailsFromResponses(u.InputTokensDetails)
+	usage.CompletionTokensDetails = completionDetailsFromResponses(u.OutputTokensDetails)
+	return usage
+}
+
+// promptDetailsFromResponses maps Responses-API input_tokens_details into a
+// Chat-Completions prompt_tokens_details. Returns nil when nothing would be
+// emitted, so upstreams that do not break down prompt usage stay clean.
+func promptDetailsFromResponses(src *ResponsesInputTokensDetails) *ChatTokenDetails {
+	if src == nil {
+		return nil
+	}
+	if src.CachedTokens == 0 && src.AudioTokens == 0 {
+		return nil
+	}
+	return &ChatTokenDetails{
+		CachedTokens: src.CachedTokens,
+		AudioTokens:  src.AudioTokens,
+	}
+}
+
+// completionDetailsFromResponses maps Responses-API output_tokens_details
+// into a Chat-Completions completion_tokens_details. Mirrors the OpenAI
+// official CompletionUsage schema: reasoning_tokens, audio_tokens, and
+// the predicted-outputs accepted/rejected counts. Returns nil when nothing
+// would be emitted so non-reasoning, non-audio responses stay clean.
+func completionDetailsFromResponses(src *ResponsesOutputTokensDetails) *ChatTokenDetails {
+	if src == nil {
+		return nil
+	}
+	if src.ReasoningTokens == 0 && src.AudioTokens == 0 &&
+		src.AcceptedPredictionTokens == 0 && src.RejectedPredictionTokens == 0 {
+		return nil
+	}
+	return &ChatTokenDetails{
+		ReasoningTokens:          src.ReasoningTokens,
+		AudioTokens:              src.AudioTokens,
+		AcceptedPredictionTokens: src.AcceptedPredictionTokens,
+		RejectedPredictionTokens: src.RejectedPredictionTokens,
+	}
 }
 
 func makeChatDeltaChunk(state *ResponsesEventToChatState, delta ChatDelta) ChatCompletionsChunk {
@@ -371,4 +405,120 @@ func generateChatCmplID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	return "chatcmpl-" + hex.EncodeToString(b)
+}
+
+// ---------------------------------------------------------------------------
+// BufferedResponseAccumulator: accumulates SSE delta events for non-streaming
+// paths where the terminal event may have empty output.
+// ---------------------------------------------------------------------------
+
+type bufferedFuncCall struct {
+	CallID string
+	Name   string
+	Args   strings.Builder
+}
+
+// BufferedResponseAccumulator collects content from Responses SSE delta events
+// so that non-streaming handlers can reconstruct output when the terminal event
+// (response.completed / response.done) carries an empty output array.
+type BufferedResponseAccumulator struct {
+	text                 strings.Builder
+	reasoning            strings.Builder
+	funcCalls            []bufferedFuncCall
+	outputIndexToFuncIdx map[int]int
+}
+
+// NewBufferedResponseAccumulator returns an initialised accumulator.
+func NewBufferedResponseAccumulator() *BufferedResponseAccumulator {
+	return &BufferedResponseAccumulator{
+		outputIndexToFuncIdx: make(map[int]int),
+	}
+}
+
+// ProcessEvent inspects a single Responses SSE event and accumulates any
+// content it carries. Only delta events that contribute to the final output
+// are handled; all other event types are silently ignored.
+func (a *BufferedResponseAccumulator) ProcessEvent(event *ResponsesStreamEvent) {
+	switch event.Type {
+	case "response.output_text.delta":
+		if event.Delta != "" {
+			_, _ = a.text.WriteString(event.Delta)
+		}
+	case "response.output_item.added":
+		if event.Item != nil && event.Item.Type == "function_call" {
+			idx := len(a.funcCalls)
+			a.outputIndexToFuncIdx[event.OutputIndex] = idx
+			a.funcCalls = append(a.funcCalls, bufferedFuncCall{
+				CallID: event.Item.CallID,
+				Name:   event.Item.Name,
+			})
+		}
+	case "response.function_call_arguments.delta":
+		if event.Delta != "" {
+			if idx, ok := a.outputIndexToFuncIdx[event.OutputIndex]; ok {
+				_, _ = a.funcCalls[idx].Args.WriteString(event.Delta)
+			}
+		}
+	case "response.reasoning_summary_text.delta":
+		if event.Delta != "" {
+			_, _ = a.reasoning.WriteString(event.Delta)
+		}
+	}
+}
+
+// HasContent reports whether any content has been accumulated.
+func (a *BufferedResponseAccumulator) HasContent() bool {
+	return a.text.Len() > 0 || len(a.funcCalls) > 0 || a.reasoning.Len() > 0
+}
+
+// BuildOutput constructs a []ResponsesOutput from the accumulated delta
+// content. The order matches what ResponsesToChatCompletions expects:
+// reasoning → message → function_calls.
+func (a *BufferedResponseAccumulator) BuildOutput() []ResponsesOutput {
+	var out []ResponsesOutput
+
+	if a.reasoning.Len() > 0 {
+		out = append(out, ResponsesOutput{
+			Type: "reasoning",
+			Summary: []ResponsesSummary{{
+				Type: "summary_text",
+				Text: a.reasoning.String(),
+			}},
+		})
+	}
+
+	if a.text.Len() > 0 {
+		out = append(out, ResponsesOutput{
+			Type: "message",
+			Role: "assistant",
+			Content: []ResponsesContentPart{{
+				Type: "output_text",
+				Text: a.text.String(),
+			}},
+		})
+	}
+
+	for i := range a.funcCalls {
+		out = append(out, ResponsesOutput{
+			Type:      "function_call",
+			CallID:    a.funcCalls[i].CallID,
+			Name:      a.funcCalls[i].Name,
+			Arguments: a.funcCalls[i].Args.String(),
+		})
+	}
+
+	return out
+}
+
+// SupplementResponseOutput fills resp.Output from accumulated delta content
+// when the terminal event delivered an empty output array. If resp.Output is
+// already populated, this is a no-op (preserves backward compatibility).
+func (a *BufferedResponseAccumulator) SupplementResponseOutput(resp *ResponsesResponse) {
+	if resp == nil || len(resp.Output) > 0 {
+		return
+	}
+	if !a.HasContent() {
+		return
+	}
+	resp.Output = a.BuildOutput()
 }

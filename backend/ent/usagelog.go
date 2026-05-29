@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -36,6 +37,14 @@ type UsageLog struct {
 	RequestedModel *string `json:"requested_model,omitempty"`
 	// UpstreamModel holds the value of the "upstream_model" field.
 	UpstreamModel *string `json:"upstream_model,omitempty"`
+	// 渠道 ID
+	ChannelID *int64 `json:"channel_id,omitempty"`
+	// 模型映射链
+	ModelMappingChain *string `json:"model_mapping_chain,omitempty"`
+	// 计费层级标签
+	BillingTier *string `json:"billing_tier,omitempty"`
+	// 计费模式：token/per_request/image
+	BillingMode *string `json:"billing_mode,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *int64 `json:"group_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
@@ -84,8 +93,14 @@ type UsageLog struct {
 	ImageCount int `json:"image_count,omitempty"`
 	// ImageSize holds the value of the "image_size" field.
 	ImageSize *string `json:"image_size,omitempty"`
-	// MediaType holds the value of the "media_type" field.
-	MediaType *string `json:"media_type,omitempty"`
+	// ImageInputSize holds the value of the "image_input_size" field.
+	ImageInputSize *string `json:"image_input_size,omitempty"`
+	// ImageOutputSize holds the value of the "image_output_size" field.
+	ImageOutputSize *string `json:"image_output_size,omitempty"`
+	// ImageSizeSource holds the value of the "image_size_source" field.
+	ImageSizeSource *string `json:"image_size_source,omitempty"`
+	// ImageSizeBreakdown holds the value of the "image_size_breakdown" field.
+	ImageSizeBreakdown map[string]int `json:"image_size_breakdown,omitempty"`
 	// CacheTTLOverridden holds the value of the "cache_ttl_overridden" field.
 	CacheTTLOverridden bool `json:"cache_ttl_overridden,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -173,13 +188,15 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case usagelog.FieldImageSizeBreakdown:
+			values[i] = new([]byte)
 		case usagelog.FieldStream, usagelog.FieldCacheTTLOverridden:
 			values[i] = new(sql.NullBool)
 		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
 			values[i] = new(sql.NullFloat64)
-		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount:
+		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount:
 			values[i] = new(sql.NullInt64)
-		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldMediaType:
+		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldImageInputSize, usagelog.FieldImageOutputSize, usagelog.FieldImageSizeSource:
 			values[i] = new(sql.NullString)
 		case usagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -247,6 +264,34 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UpstreamModel = new(string)
 				*_m.UpstreamModel = value.String
+			}
+		case usagelog.FieldChannelID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field channel_id", values[i])
+			} else if value.Valid {
+				_m.ChannelID = new(int64)
+				*_m.ChannelID = value.Int64
+			}
+		case usagelog.FieldModelMappingChain:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field model_mapping_chain", values[i])
+			} else if value.Valid {
+				_m.ModelMappingChain = new(string)
+				*_m.ModelMappingChain = value.String
+			}
+		case usagelog.FieldBillingTier:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_tier", values[i])
+			} else if value.Valid {
+				_m.BillingTier = new(string)
+				*_m.BillingTier = value.String
+			}
+		case usagelog.FieldBillingMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_mode", values[i])
+			} else if value.Valid {
+				_m.BillingMode = new(string)
+				*_m.BillingMode = value.String
 			}
 		case usagelog.FieldGroupID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -400,12 +445,34 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 				_m.ImageSize = new(string)
 				*_m.ImageSize = value.String
 			}
-		case usagelog.FieldMediaType:
+		case usagelog.FieldImageInputSize:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field media_type", values[i])
+				return fmt.Errorf("unexpected type %T for field image_input_size", values[i])
 			} else if value.Valid {
-				_m.MediaType = new(string)
-				*_m.MediaType = value.String
+				_m.ImageInputSize = new(string)
+				*_m.ImageInputSize = value.String
+			}
+		case usagelog.FieldImageOutputSize:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field image_output_size", values[i])
+			} else if value.Valid {
+				_m.ImageOutputSize = new(string)
+				*_m.ImageOutputSize = value.String
+			}
+		case usagelog.FieldImageSizeSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field image_size_source", values[i])
+			} else if value.Valid {
+				_m.ImageSizeSource = new(string)
+				*_m.ImageSizeSource = value.String
+			}
+		case usagelog.FieldImageSizeBreakdown:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field image_size_breakdown", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ImageSizeBreakdown); err != nil {
+					return fmt.Errorf("unmarshal field image_size_breakdown: %w", err)
+				}
 			}
 		case usagelog.FieldCacheTTLOverridden:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -505,6 +572,26 @@ func (_m *UsageLog) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
+	if v := _m.ChannelID; v != nil {
+		builder.WriteString("channel_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ModelMappingChain; v != nil {
+		builder.WriteString("model_mapping_chain=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BillingTier; v != nil {
+		builder.WriteString("billing_tier=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BillingMode; v != nil {
+		builder.WriteString("billing_mode=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
@@ -593,10 +680,23 @@ func (_m *UsageLog) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.MediaType; v != nil {
-		builder.WriteString("media_type=")
+	if v := _m.ImageInputSize; v != nil {
+		builder.WriteString("image_input_size=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	if v := _m.ImageOutputSize; v != nil {
+		builder.WriteString("image_output_size=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ImageSizeSource; v != nil {
+		builder.WriteString("image_size_source=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("image_size_breakdown=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ImageSizeBreakdown))
 	builder.WriteString(", ")
 	builder.WriteString("cache_ttl_overridden=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CacheTTLOverridden))

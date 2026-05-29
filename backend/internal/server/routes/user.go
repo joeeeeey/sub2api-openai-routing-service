@@ -25,6 +25,23 @@ func RegisterUserRoutes(
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+			user.GET("/aff", h.User.GetAffiliate)
+			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
+			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
+			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
+			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
+			user.POST("/auth-identities/bind/start", h.User.StartIdentityBinding)
+			user.GET("/api-keys/:id/usage/daily", h.Usage.GetMyAPIKeyDailyUsage)
+			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
+
+			// 通知邮箱管理
+			notifyEmail := user.Group("/notify-email")
+			{
+				notifyEmail.POST("/send-code", h.User.SendNotifyEmailCode)
+				notifyEmail.POST("/verify", h.User.VerifyNotifyEmail)
+				notifyEmail.PUT("/toggle", h.User.ToggleNotifyEmail)
+				notifyEmail.DELETE("", h.User.RemoveNotifyEmail)
+			}
 
 			// TOTP 双因素认证
 			totp := user.Group("/totp")
@@ -53,6 +70,12 @@ func RegisterUserRoutes(
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
+		}
+
+		// 用户可用渠道（非管理员接口）
+		channels := authenticated.Group("/channels")
+		{
+			channels.GET("/available", h.AvailableChannel.List)
 		}
 
 		// 使用记录
@@ -89,6 +112,13 @@ func RegisterUserRoutes(
 			subscriptions.GET("/active", h.Subscription.GetActive)
 			subscriptions.GET("/progress", h.Subscription.GetProgress)
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
+		}
+
+		// 渠道监控（用户只读）
+		monitors := authenticated.Group("/channel-monitors")
+		{
+			monitors.GET("", h.ChannelMonitor.List)
+			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
 	}
 }

@@ -34,8 +34,6 @@ func RegisterAdminRoutes(
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
-		// Sora OAuth（实现复用 OpenAI OAuth 服务，入口独立）
-		registerSoraOAuthRoutes(admin, h)
 
 		// Gemini OAuth
 		registerGeminiOAuthRoutes(admin, h)
@@ -79,11 +77,40 @@ func RegisterAdminRoutes(
 		// 错误透传规则管理
 		registerErrorPassthroughRoutes(admin, h)
 
+		// TLS 指纹模板管理
+		registerTLSFingerprintProfileRoutes(admin, h)
+
 		// API Key 管理
 		registerAdminAPIKeyRoutes(admin, h)
 
 		// 定时测试计划
 		registerScheduledTestRoutes(admin, h)
+
+		// 渠道管理
+		registerChannelRoutes(admin, h)
+
+		// 渠道监控
+		registerChannelMonitorRoutes(admin, h)
+
+		// 风控中心
+		registerContentModerationRoutes(admin, h)
+
+		// 邀请返利（专属用户管理）
+		registerAffiliateRoutes(admin, h)
+	}
+}
+
+func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	risk := admin.Group("/risk-control")
+	{
+		risk.GET("/config", h.Admin.ContentModeration.GetConfig)
+		risk.PUT("/config", h.Admin.ContentModeration.UpdateConfig)
+		risk.POST("/api-keys/test", h.Admin.ContentModeration.TestAPIKeys)
+		risk.GET("/status", h.Admin.ContentModeration.GetStatus)
+		risk.GET("/logs", h.Admin.ContentModeration.ListLogs)
+		risk.POST("/users/:user_id/unban", h.Admin.ContentModeration.UnbanUser)
+		risk.DELETE("/hashes", h.Admin.ContentModeration.DeleteFlaggedHash)
+		risk.DELETE("/hashes/all", h.Admin.ContentModeration.ClearFlaggedHashes)
 	}
 }
 
@@ -147,22 +174,17 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Error logs (legacy)
 		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
 		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)
-		ops.GET("/errors/:id/retries", h.Admin.Ops.ListRetryAttempts)
-		ops.POST("/errors/:id/retry", h.Admin.Ops.RetryErrorRequest)
 		ops.PUT("/errors/:id/resolve", h.Admin.Ops.UpdateErrorResolution)
 
 		// Request errors (client-visible failures)
 		ops.GET("/request-errors", h.Admin.Ops.ListRequestErrors)
 		ops.GET("/request-errors/:id", h.Admin.Ops.GetRequestError)
 		ops.GET("/request-errors/:id/upstream-errors", h.Admin.Ops.ListRequestErrorUpstreamErrors)
-		ops.POST("/request-errors/:id/retry-client", h.Admin.Ops.RetryRequestErrorClient)
-		ops.POST("/request-errors/:id/upstream-errors/:idx/retry", h.Admin.Ops.RetryRequestErrorUpstreamEvent)
 		ops.PUT("/request-errors/:id/resolve", h.Admin.Ops.ResolveRequestError)
 
 		// Upstream errors (independent upstream failures)
 		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
 		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
-		ops.POST("/upstream-errors/:id/retry", h.Admin.Ops.RetryUpstreamError)
 		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
 
 		// Request drilldown (success + error)
@@ -208,6 +230,7 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		users.GET("", h.Admin.User.List)
 		users.GET("/:id", h.Admin.User.GetByID)
+		users.POST("/:id/auth-identities", h.Admin.User.BindAuthIdentity)
 		users.POST("", h.Admin.User.Create)
 		users.PUT("/:id", h.Admin.User.Update)
 		users.DELETE("/:id", h.Admin.User.Delete)
@@ -216,6 +239,11 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		users.GET("/:id/usage", h.Admin.User.GetUserUsage)
 		users.GET("/:id/balance-history", h.Admin.User.GetBalanceHistory)
 		users.POST("/:id/replace-group", h.Admin.User.ReplaceGroup)
+		users.GET("/:id/rpm-status", h.Admin.User.GetUserRPMStatus)
+		users.POST("/batch-concurrency", h.Admin.User.BatchUpdateConcurrency)
+		users.GET("/:id/platform-quotas", h.Admin.User.GetUserPlatformQuotas)
+		users.PUT("/:id/platform-quotas", h.Admin.User.UpdateUserPlatformQuotas)
+		users.POST("/:id/platform-quotas/reset", h.Admin.User.ResetUserPlatformQuotaWindow)
 
 		// User attribute values
 		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)
@@ -231,6 +259,7 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		groups.GET("/usage-summary", h.Admin.Group.GetUsageSummary)
 		groups.GET("/capacity-summary", h.Admin.Group.GetCapacitySummary)
 		groups.PUT("/sort-order", h.Admin.Group.UpdateSortOrder)
+		groups.GET("/:id/models-list-candidates", h.Admin.Group.GetModelsListCandidates)
 		groups.GET("/:id", h.Admin.Group.GetByID)
 		groups.POST("", h.Admin.Group.Create)
 		groups.PUT("/:id", h.Admin.Group.Update)
@@ -239,6 +268,8 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		groups.GET("/:id/rate-multipliers", h.Admin.Group.GetGroupRateMultipliers)
 		groups.PUT("/:id/rate-multipliers", h.Admin.Group.BatchSetGroupRateMultipliers)
 		groups.DELETE("/:id/rate-multipliers", h.Admin.Group.ClearGroupRateMultipliers)
+		groups.PUT("/:id/rpm-overrides", h.Admin.Group.BatchSetGroupRPMOverrides)
+		groups.DELETE("/:id/rpm-overrides", h.Admin.Group.ClearGroupRPMOverrides)
 		groups.GET("/:id/api-keys", h.Admin.Group.GetGroupAPIKeys)
 	}
 }
@@ -250,6 +281,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.GET("/:id", h.Admin.Account.GetByID)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/check-mixed-channel", h.Admin.Account.CheckMixedChannel)
+		accounts.POST("/import/codex-session", h.Admin.Account.ImportCodexSession)
 		accounts.POST("/sync/crs", h.Admin.Account.SyncFromCRS)
 		accounts.POST("/sync/crs/preview", h.Admin.Account.PreviewFromCRS)
 		accounts.PUT("/:id", h.Admin.Account.Update)
@@ -257,6 +289,8 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("/:id/test", h.Admin.Account.Test)
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
+		accounts.POST("/:id/apply-oauth-credentials", h.Admin.Account.ApplyOAuthCredentials)
+		accounts.POST("/:id/set-privacy", h.Admin.Account.SetPrivacy)
 		accounts.POST("/:id/refresh-tier", h.Admin.Account.RefreshTier)
 		accounts.GET("/:id/stats", h.Admin.Account.GetStats)
 		accounts.POST("/:id/clear-error", h.Admin.Account.ClearError)
@@ -269,6 +303,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.DELETE("/:id/temp-unschedulable", h.Admin.Account.ClearTempUnschedulable)
 		accounts.POST("/:id/schedulable", h.Admin.Account.SetSchedulable)
 		accounts.GET("/:id/models", h.Admin.Account.GetAvailableModels)
+		accounts.POST("/:id/models/sync-upstream", h.Admin.Account.SyncUpstreamModels)
 		accounts.POST("/batch", h.Admin.Account.BatchCreate)
 		accounts.GET("/data", h.Admin.Account.ExportData)
 		accounts.POST("/data", h.Admin.Account.ImportData)
@@ -311,19 +346,6 @@ func registerOpenAIOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		openai.POST("/refresh-token", h.Admin.OpenAIOAuth.RefreshToken)
 		openai.POST("/accounts/:id/refresh", h.Admin.OpenAIOAuth.RefreshAccountToken)
 		openai.POST("/create-from-oauth", h.Admin.OpenAIOAuth.CreateAccountFromOAuth)
-	}
-}
-
-func registerSoraOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	sora := admin.Group("/sora")
-	{
-		sora.POST("/generate-auth-url", h.Admin.OpenAIOAuth.GenerateAuthURL)
-		sora.POST("/exchange-code", h.Admin.OpenAIOAuth.ExchangeCode)
-		sora.POST("/refresh-token", h.Admin.OpenAIOAuth.RefreshToken)
-		sora.POST("/st2at", h.Admin.OpenAIOAuth.ExchangeSoraSessionToken)
-		sora.POST("/rt2at", h.Admin.OpenAIOAuth.RefreshToken)
-		sora.POST("/accounts/:id/refresh", h.Admin.OpenAIOAuth.RefreshAccountToken)
-		sora.POST("/create-from-oauth", h.Admin.OpenAIOAuth.CreateAccountFromOAuth)
 	}
 }
 
@@ -376,6 +398,7 @@ func registerRedeemCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		codes.POST("/generate", h.Admin.Redeem.Generate)
 		codes.DELETE("/:id", h.Admin.Redeem.Delete)
 		codes.POST("/batch-delete", h.Admin.Redeem.BatchDelete)
+		codes.POST("/batch-update", h.Admin.Redeem.BatchUpdate)
 		codes.POST("/:id/expire", h.Admin.Redeem.Expire)
 	}
 }
@@ -399,6 +422,11 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
+		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)
+		adminSettings.POST("/email-template-preview", h.Admin.Setting.PreviewEmailTemplate)
+		adminSettings.GET("/email-templates/:event/:locale", h.Admin.Setting.GetEmailTemplate)
+		adminSettings.PUT("/email-templates/:event/:locale", h.Admin.Setting.UpdateEmailTemplate)
+		adminSettings.POST("/email-templates/:event/:locale/restore-official", h.Admin.Setting.RestoreOfficialEmailTemplate)
 		// Admin API Key 管理
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)
 		adminSettings.POST("/admin-api-key/regenerate", h.Admin.Setting.RegenerateAdminAPIKey)
@@ -406,6 +434,9 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// 529过载冷却配置
 		adminSettings.GET("/overload-cooldown", h.Admin.Setting.GetOverloadCooldownSettings)
 		adminSettings.PUT("/overload-cooldown", h.Admin.Setting.UpdateOverloadCooldownSettings)
+		// 429默认回避配置
+		adminSettings.GET("/rate-limit-429-cooldown", h.Admin.Setting.GetRateLimit429CooldownSettings)
+		adminSettings.PUT("/rate-limit-429-cooldown", h.Admin.Setting.UpdateRateLimit429CooldownSettings)
 		// 流超时处理配置
 		adminSettings.GET("/stream-timeout", h.Admin.Setting.GetStreamTimeoutSettings)
 		adminSettings.PUT("/stream-timeout", h.Admin.Setting.UpdateStreamTimeoutSettings)
@@ -415,15 +446,11 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Beta 策略配置
 		adminSettings.GET("/beta-policy", h.Admin.Setting.GetBetaPolicySettings)
 		adminSettings.PUT("/beta-policy", h.Admin.Setting.UpdateBetaPolicySettings)
-		// Sora S3 存储配置
-		adminSettings.GET("/sora-s3", h.Admin.Setting.GetSoraS3Settings)
-		adminSettings.PUT("/sora-s3", h.Admin.Setting.UpdateSoraS3Settings)
-		adminSettings.POST("/sora-s3/test", h.Admin.Setting.TestSoraS3Connection)
-		adminSettings.GET("/sora-s3/profiles", h.Admin.Setting.ListSoraS3Profiles)
-		adminSettings.POST("/sora-s3/profiles", h.Admin.Setting.CreateSoraS3Profile)
-		adminSettings.PUT("/sora-s3/profiles/:profile_id", h.Admin.Setting.UpdateSoraS3Profile)
-		adminSettings.DELETE("/sora-s3/profiles/:profile_id", h.Admin.Setting.DeleteSoraS3Profile)
-		adminSettings.POST("/sora-s3/profiles/:profile_id/activate", h.Admin.Setting.SetActiveSoraS3Profile)
+		// Web Search 模拟配置
+		adminSettings.GET("/web-search-emulation", h.Admin.Setting.GetWebSearchEmulationConfig)
+		adminSettings.PUT("/web-search-emulation", h.Admin.Setting.UpdateWebSearchEmulationConfig)
+		adminSettings.POST("/web-search-emulation/test", h.Admin.Setting.TestWebSearchEmulation)
+		adminSettings.POST("/web-search-emulation/reset-usage", h.Admin.Setting.ResetWebSearchUsage)
 	}
 }
 
@@ -550,5 +577,73 @@ func registerErrorPassthroughRoutes(admin *gin.RouterGroup, h *handler.Handlers)
 		rules.POST("", h.Admin.ErrorPassthrough.Create)
 		rules.PUT("/:id", h.Admin.ErrorPassthrough.Update)
 		rules.DELETE("/:id", h.Admin.ErrorPassthrough.Delete)
+	}
+}
+
+func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	profiles := admin.Group("/tls-fingerprint-profiles")
+	{
+		profiles.GET("", h.Admin.TLSFingerprintProfile.List)
+		profiles.GET("/:id", h.Admin.TLSFingerprintProfile.GetByID)
+		profiles.POST("", h.Admin.TLSFingerprintProfile.Create)
+		profiles.PUT("/:id", h.Admin.TLSFingerprintProfile.Update)
+		profiles.DELETE("/:id", h.Admin.TLSFingerprintProfile.Delete)
+	}
+}
+
+func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	channels := admin.Group("/channels")
+	{
+		channels.GET("", h.Admin.Channel.List)
+		channels.GET("/model-pricing", h.Admin.Channel.GetModelDefaultPricing)
+		channels.GET("/pricing/sync-models", h.Admin.Channel.SyncPricingModels)
+		channels.GET("/:id", h.Admin.Channel.GetByID)
+		channels.POST("", h.Admin.Channel.Create)
+		channels.PUT("/:id", h.Admin.Channel.Update)
+		channels.DELETE("/:id", h.Admin.Channel.Delete)
+	}
+}
+
+func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	monitors := admin.Group("/channel-monitors")
+	{
+		monitors.GET("", h.Admin.ChannelMonitor.List)
+		monitors.POST("", h.Admin.ChannelMonitor.Create)
+		monitors.GET("/:id", h.Admin.ChannelMonitor.Get)
+		monitors.PUT("/:id", h.Admin.ChannelMonitor.Update)
+		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
+		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
+		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
+	}
+
+	templates := admin.Group("/channel-monitor-templates")
+	{
+		templates.GET("", h.Admin.ChannelMonitorTemplate.List)
+		templates.POST("", h.Admin.ChannelMonitorTemplate.Create)
+		templates.GET("/:id", h.Admin.ChannelMonitorTemplate.Get)
+		templates.PUT("/:id", h.Admin.ChannelMonitorTemplate.Update)
+		templates.DELETE("/:id", h.Admin.ChannelMonitorTemplate.Delete)
+		templates.GET("/:id/monitors", h.Admin.ChannelMonitorTemplate.AssociatedMonitors)
+		templates.POST("/:id/apply", h.Admin.ChannelMonitorTemplate.Apply)
+	}
+}
+
+// registerAffiliateRoutes 注册邀请返利的管理端路由（专属用户配置）
+func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	affiliates := admin.Group("/affiliates")
+	{
+		affiliates.GET("/invites", h.Admin.Affiliate.ListInviteRecords)
+		affiliates.GET("/rebates", h.Admin.Affiliate.ListRebateRecords)
+		affiliates.GET("/transfers", h.Admin.Affiliate.ListTransferRecords)
+
+		users := affiliates.Group("/users")
+		{
+			users.GET("", h.Admin.Affiliate.ListUsers)
+			users.GET("/lookup", h.Admin.Affiliate.LookupUsers)
+			users.POST("/batch-rate", h.Admin.Affiliate.BatchSetRate)
+			users.GET("/:user_id/overview", h.Admin.Affiliate.GetUserOverview)
+			users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
+			users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)
+		}
 	}
 }

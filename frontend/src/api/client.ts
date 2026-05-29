@@ -13,6 +13,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -92,10 +93,13 @@ apiClient.interceptors.response.use(
         response.data = apiResponse.data
       } else {
         // API error
+        const resp = apiResponse as unknown as Record<string, unknown>
         return Promise.reject({
           status: response.status,
           code: apiResponse.code,
-          message: apiResponse.message || 'Unknown error'
+          message: apiResponse.message || 'Unknown error',
+          reason: resp.reason,
+          metadata: resp.metadata,
         })
       }
     }
@@ -267,8 +271,10 @@ apiClient.interceptors.response.use(
       return Promise.reject({
         status,
         code: apiData.code,
+        reason: apiData.reason,
         error: apiData.error,
-        message: apiData.message || apiData.detail || error.message
+        message: apiData.message || apiData.detail || error.message,
+        metadata: apiData.metadata,
       })
     }
 

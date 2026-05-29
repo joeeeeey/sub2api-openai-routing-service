@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // Group is the model entity for the Group schema.
@@ -46,22 +47,18 @@ type Group struct {
 	MonthlyLimitUsd *float64 `json:"monthly_limit_usd,omitempty"`
 	// DefaultValidityDays holds the value of the "default_validity_days" field.
 	DefaultValidityDays int `json:"default_validity_days,omitempty"`
+	// 是否允许该分组使用图片生成能力
+	AllowImageGeneration bool `json:"allow_image_generation,omitempty"`
+	// 图片生成是否使用独立倍率；false 表示共享分组有效倍率
+	ImageRateIndependent bool `json:"image_rate_independent,omitempty"`
+	// 图片生成独立倍率，仅 image_rate_independent=true 时生效
+	ImageRateMultiplier float64 `json:"image_rate_multiplier,omitempty"`
 	// ImagePrice1k holds the value of the "image_price_1k" field.
 	ImagePrice1k *float64 `json:"image_price_1k,omitempty"`
 	// ImagePrice2k holds the value of the "image_price_2k" field.
 	ImagePrice2k *float64 `json:"image_price_2k,omitempty"`
 	// ImagePrice4k holds the value of the "image_price_4k" field.
 	ImagePrice4k *float64 `json:"image_price_4k,omitempty"`
-	// SoraImagePrice360 holds the value of the "sora_image_price_360" field.
-	SoraImagePrice360 *float64 `json:"sora_image_price_360,omitempty"`
-	// SoraImagePrice540 holds the value of the "sora_image_price_540" field.
-	SoraImagePrice540 *float64 `json:"sora_image_price_540,omitempty"`
-	// SoraVideoPricePerRequest holds the value of the "sora_video_price_per_request" field.
-	SoraVideoPricePerRequest *float64 `json:"sora_video_price_per_request,omitempty"`
-	// SoraVideoPricePerRequestHd holds the value of the "sora_video_price_per_request_hd" field.
-	SoraVideoPricePerRequestHd *float64 `json:"sora_video_price_per_request_hd,omitempty"`
-	// SoraStorageQuotaBytes holds the value of the "sora_storage_quota_bytes" field.
-	SoraStorageQuotaBytes int64 `json:"sora_storage_quota_bytes,omitempty"`
 	// 是否仅允许 Claude Code 客户端
 	ClaudeCodeOnly bool `json:"claude_code_only,omitempty"`
 	// 非 Claude Code 请求降级使用的分组 ID
@@ -80,8 +77,18 @@ type Group struct {
 	SortOrder int `json:"sort_order,omitempty"`
 	// 是否允许 /v1/messages 调度到此 OpenAI 分组
 	AllowMessagesDispatch bool `json:"allow_messages_dispatch,omitempty"`
+	// 仅允许非 apikey 类型账号关联到此分组
+	RequireOauthOnly bool `json:"require_oauth_only,omitempty"`
+	// 调度时仅允许 privacy 已成功设置的账号
+	RequirePrivacySet bool `json:"require_privacy_set,omitempty"`
 	// 默认映射模型 ID，当账号级映射找不到时使用此值
 	DefaultMappedModel string `json:"default_mapped_model,omitempty"`
+	// OpenAI Messages 调度模型配置：按 Claude 系列/精确模型映射到目标 GPT 模型
+	MessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config,omitempty"`
+	// 自定义 /v1/models 展示列表配置；仅影响模型列表响应，不影响调度
+	ModelsListConfig domain.GroupModelsListConfig `json:"models_list_config,omitempty"`
+	// 分组 RPM 上限，0 表示不限制；设置后接管该分组用户的限流
+	RpmLimit int `json:"rpm_limit,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GroupQuery when eager-loading is set.
 	Edges        GroupEdges `json:"edges"`
@@ -188,13 +195,13 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case group.FieldModelRouting, group.FieldSupportedModelScopes:
+		case group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelsListConfig:
 			values[i] = new([]byte)
-		case group.FieldIsExclusive, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch:
+		case group.FieldIsExclusive, group.FieldAllowImageGeneration, group.FieldImageRateIndependent, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet:
 			values[i] = new(sql.NullBool)
-		case group.FieldRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldSoraImagePrice360, group.FieldSoraImagePrice540, group.FieldSoraVideoPricePerRequest, group.FieldSoraVideoPricePerRequestHd:
+		case group.FieldRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k:
 			values[i] = new(sql.NullFloat64)
-		case group.FieldID, group.FieldDefaultValidityDays, group.FieldSoraStorageQuotaBytes, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldSortOrder:
+		case group.FieldID, group.FieldDefaultValidityDays, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldSortOrder, group.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
 		case group.FieldName, group.FieldDescription, group.FieldStatus, group.FieldPlatform, group.FieldSubscriptionType, group.FieldDefaultMappedModel:
 			values[i] = new(sql.NullString)
@@ -310,6 +317,24 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.DefaultValidityDays = int(value.Int64)
 			}
+		case group.FieldAllowImageGeneration:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_image_generation", values[i])
+			} else if value.Valid {
+				_m.AllowImageGeneration = value.Bool
+			}
+		case group.FieldImageRateIndependent:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field image_rate_independent", values[i])
+			} else if value.Valid {
+				_m.ImageRateIndependent = value.Bool
+			}
+		case group.FieldImageRateMultiplier:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field image_rate_multiplier", values[i])
+			} else if value.Valid {
+				_m.ImageRateMultiplier = value.Float64
+			}
 		case group.FieldImagePrice1k:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field image_price_1k", values[i])
@@ -330,40 +355,6 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ImagePrice4k = new(float64)
 				*_m.ImagePrice4k = value.Float64
-			}
-		case group.FieldSoraImagePrice360:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field sora_image_price_360", values[i])
-			} else if value.Valid {
-				_m.SoraImagePrice360 = new(float64)
-				*_m.SoraImagePrice360 = value.Float64
-			}
-		case group.FieldSoraImagePrice540:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field sora_image_price_540", values[i])
-			} else if value.Valid {
-				_m.SoraImagePrice540 = new(float64)
-				*_m.SoraImagePrice540 = value.Float64
-			}
-		case group.FieldSoraVideoPricePerRequest:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field sora_video_price_per_request", values[i])
-			} else if value.Valid {
-				_m.SoraVideoPricePerRequest = new(float64)
-				*_m.SoraVideoPricePerRequest = value.Float64
-			}
-		case group.FieldSoraVideoPricePerRequestHd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field sora_video_price_per_request_hd", values[i])
-			} else if value.Valid {
-				_m.SoraVideoPricePerRequestHd = new(float64)
-				*_m.SoraVideoPricePerRequestHd = value.Float64
-			}
-		case group.FieldSoraStorageQuotaBytes:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field sora_storage_quota_bytes", values[i])
-			} else if value.Valid {
-				_m.SoraStorageQuotaBytes = value.Int64
 			}
 		case group.FieldClaudeCodeOnly:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -425,11 +416,45 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AllowMessagesDispatch = value.Bool
 			}
+		case group.FieldRequireOauthOnly:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field require_oauth_only", values[i])
+			} else if value.Valid {
+				_m.RequireOauthOnly = value.Bool
+			}
+		case group.FieldRequirePrivacySet:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field require_privacy_set", values[i])
+			} else if value.Valid {
+				_m.RequirePrivacySet = value.Bool
+			}
 		case group.FieldDefaultMappedModel:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field default_mapped_model", values[i])
 			} else if value.Valid {
 				_m.DefaultMappedModel = value.String
+			}
+		case group.FieldMessagesDispatchModelConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field messages_dispatch_model_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.MessagesDispatchModelConfig); err != nil {
+					return fmt.Errorf("unmarshal field messages_dispatch_model_config: %w", err)
+				}
+			}
+		case group.FieldModelsListConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field models_list_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelsListConfig); err != nil {
+					return fmt.Errorf("unmarshal field models_list_config: %w", err)
+				}
+			}
+		case group.FieldRpmLimit:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field rpm_limit", values[i])
+			} else if value.Valid {
+				_m.RpmLimit = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -559,6 +584,15 @@ func (_m *Group) String() string {
 	builder.WriteString("default_validity_days=")
 	builder.WriteString(fmt.Sprintf("%v", _m.DefaultValidityDays))
 	builder.WriteString(", ")
+	builder.WriteString("allow_image_generation=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowImageGeneration))
+	builder.WriteString(", ")
+	builder.WriteString("image_rate_independent=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ImageRateIndependent))
+	builder.WriteString(", ")
+	builder.WriteString("image_rate_multiplier=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ImageRateMultiplier))
+	builder.WriteString(", ")
 	if v := _m.ImagePrice1k; v != nil {
 		builder.WriteString("image_price_1k=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
@@ -573,29 +607,6 @@ func (_m *Group) String() string {
 		builder.WriteString("image_price_4k=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
-	builder.WriteString(", ")
-	if v := _m.SoraImagePrice360; v != nil {
-		builder.WriteString("sora_image_price_360=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := _m.SoraImagePrice540; v != nil {
-		builder.WriteString("sora_image_price_540=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := _m.SoraVideoPricePerRequest; v != nil {
-		builder.WriteString("sora_video_price_per_request=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := _m.SoraVideoPricePerRequestHd; v != nil {
-		builder.WriteString("sora_video_price_per_request_hd=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	builder.WriteString("sora_storage_quota_bytes=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SoraStorageQuotaBytes))
 	builder.WriteString(", ")
 	builder.WriteString("claude_code_only=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ClaudeCodeOnly))
@@ -628,8 +639,23 @@ func (_m *Group) String() string {
 	builder.WriteString("allow_messages_dispatch=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowMessagesDispatch))
 	builder.WriteString(", ")
+	builder.WriteString("require_oauth_only=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RequireOauthOnly))
+	builder.WriteString(", ")
+	builder.WriteString("require_privacy_set=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RequirePrivacySet))
+	builder.WriteString(", ")
 	builder.WriteString("default_mapped_model=")
 	builder.WriteString(_m.DefaultMappedModel)
+	builder.WriteString(", ")
+	builder.WriteString("messages_dispatch_model_config=")
+	builder.WriteString(fmt.Sprintf("%v", _m.MessagesDispatchModelConfig))
+	builder.WriteString(", ")
+	builder.WriteString("models_list_config=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelsListConfig))
+	builder.WriteString(", ")
+	builder.WriteString("rpm_limit=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RpmLimit))
 	builder.WriteByte(')')
 	return builder.String()
 }

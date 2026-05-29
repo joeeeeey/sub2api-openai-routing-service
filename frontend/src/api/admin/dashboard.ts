@@ -167,6 +167,13 @@ export interface UserBreakdownParams {
   endpoint?: string
   endpoint_type?: 'inbound' | 'upstream' | 'path'
   limit?: number
+  // Additional filter conditions
+  user_id?: number
+  api_key_id?: number
+  account_id?: number
+  request_type?: number
+  stream?: boolean
+  billing_type?: number | null
 }
 
 export interface UserBreakdownResponse {
@@ -259,10 +266,17 @@ export async function getUserSpendingRanking(
   return data
 }
 
+export interface PlatformUsage {
+  platform: string
+  today_actual_cost: number
+  total_actual_cost: number
+}
+
 export interface BatchUserUsageStats {
   user_id: number
   today_actual_cost: number
   total_actual_cost: number
+  by_platform?: PlatformUsage[]
 }
 
 export interface BatchUsersUsageResponse {

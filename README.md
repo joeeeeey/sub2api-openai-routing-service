@@ -1,585 +1,331 @@
-# Sub2API
+# Sub2API OpenAI Routing Service Branch
 
-<div align="center">
+This README is intentionally branch-specific for `feature/openai-routing-service-mvp`.
+It is not meant to match upstream `main`.
 
-[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg)](https://golang.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+If you are an AI tool or a human operator landing on this branch, start here.
 
-<a href="https://trendshift.io/repositories/21823" target="_blank"><img src="https://trendshift.io/api/badge/repositories/21823" alt="Wei-Shaw%2Fsub2api | Trendshift" width="250" height="55"/></a>
+## What This Branch Is For
 
-**AI API Gateway Platform for Subscription Quota Distribution**
+This branch turns part of Sub2API into a formal OpenAI-compatible routing service with a stable REST surface under `/openai-routing`.
 
-English | [中文](README_CN.md)
+Current branch focus:
 
-</div>
+- `/openai-routing/v1/*` OpenAI-compatible endpoints
+- Responses-first support for:
+  - `gpt-5.2`
+  - `gpt-5.3`
+  - `gpt-5.4`
+  - `gpt-5.5`
+  - `gpt-image-2`
+- local load-test / TUI tooling
+- routing-service image build and deploy workflow
 
-> **Sub2API officially uses only the domains `sub2api.org` and `pincc.ai`. Other websites using the Sub2API name may be third-party deployments or services and are not affiliated with this project. Please verify and exercise your own judgment.**
+## Routes That Matter
 
----
+Primary endpoints on this branch:
 
-## Demo
+- `GET /openai-routing/healthz`
+- `GET /openai-routing/v1/models`
+- `POST /openai-routing/v1/chat/completions`
+- `POST /openai-routing/v1/images/generations`
+- `POST /openai-routing/v1/responses`
 
-Try Sub2API online: **[https://demo.sub2api.org/](https://demo.sub2api.org/)**
+For image generation, the preferred path on this branch is:
 
-Demo credentials (shared demo environment; **not** created automatically for self-hosted installs):
+- `POST /openai-routing/v1/responses`
+- top-level text model is Responses-capable
+- image generation happens through `tools[].type=image_generation`
 
-| Email | Password |
-|-------|----------|
-| admin@sub2api.org | admin123 |
+## Behavior To Preserve
 
-## Overview
+These semantics are intentional and must survive future rebases:
 
-Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions. Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
+- If a compat client omits `reasoning_effort`, do not inject a default value.
+- `/openai-routing/v1/*` routes must remain registered and working.
+- Non-stream `/v1/responses` JSON must still reconstruct or supplement terminal `output` from SSE item events when the terminal payload is incomplete.
+- `gpt-image-2` must stay usable through `/v1/responses`.
 
-## Features
+## Important Files
 
-- **Multi-Account Management** - Support multiple upstream account types (OAuth, API Key)
-- **API Key Distribution** - Generate and manage API Keys for users
-- **Precise Billing** - Token-level usage tracking and cost calculation
-- **Smart Scheduling** - Intelligent account selection with sticky sessions
-- **Concurrency Control** - Per-user and per-account concurrency limits
-- **Rate Limiting** - Configurable request and token rate limits
-- **Admin Dashboard** - Web interface for monitoring and management
-- **External System Integration** - Embed external systems (e.g. payment, ticketing) via iframe to extend the admin dashboard
+Routing-service implementation:
 
-## Don't Want to Self-Host?
+- `backend/internal/server/routes/openai_compat.go`
+- `backend/internal/handler/openai_chat_completions.go`
+- `backend/internal/handler/openai_images.go`
+- `backend/internal/service/openai_gateway_service.go`
+- `backend/internal/service/openai_images.go`
+- `backend/internal/service/openai_images_responses.go`
+- `backend/internal/service/openai_codex_transform.go`
 
-<table>
-<tr>
-<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="120"></a></td>
-<td valign="middle"><b><a href="https://shop.pincc.ai/">PinCC</a></b> is the official relay service built on Sub2API, offering stable access to Claude Code, Codex, Gemini and other popular models — ready to use, no deployment or maintenance required.</td>
-</tr>
-</table>
+Validation and tooling:
 
-## Ecosystem
+- `backend/internal/server/routes/openai_compat_integration_test.go`
+- `backend/internal/server/routes/openai_compat_images_integration_test.go`
+- `backend/internal/service/openai_gateway_service_test.go`
+- `backend/internal/service/openai_codex_transform_test.go`
+- `tools/openai_responses_image_demo.py`
+- `tools/openai_routing_loadtest_dev.py`
+- `tools/openai_routing_loadtest_runner.py`
+- `tools/openai_routing_loadtest_tui.py`
 
-Community projects that extend or integrate with Sub2API:
+Branch-specific docs:
 
-| Project | Description | Features |
-|---------|-------------|----------|
-| [Sub2ApiPay](https://github.com/touwaeriol/sub2apipay) | Self-service payment system | Self-service top-up and subscription purchase; supports YiPay protocol, WeChat Pay, Alipay, Stripe; embeddable via iframe |
-| [sub2api-mobile](https://github.com/ckken/sub2api-mobile) | Mobile admin console | Cross-platform app (iOS/Android/Web) for user management, account management, monitoring dashboard, and multi-backend switching; built with Expo + React Native |
+- `AGENTS.md`
+- `CLAUDE.md`
+- `docs/RUNBOOK_SUB2API_OPENAI_RESPONSES_IMAGE_GENERATION.md`
+- `docs/CHANGELOG_OPENAI_ROUTING_V0117_REBASE.md`
+- `docs/SOP_SUB2API_OPENAI_ROUTING_SERVICE_MAINTENANCE.md`
 
-## Tech Stack
+## Quick Start
 
-| Component | Technology |
-|-----------|------------|
-| Backend | Go 1.25.7, Gin, Ent |
-| Frontend | Vue 3.4+, Vite 5+, TailwindCSS |
-| Database | PostgreSQL 15+ |
-| Cache/Queue | Redis 7+ |
+Run from repo root unless noted.
 
----
+### Option A: Local Service With Dockerized Dependencies
 
-## Nginx Reverse Proxy Note
-
-When using Nginx as a reverse proxy for Sub2API (or CRS) with Codex CLI, add the following to the `http` block in your Nginx configuration:
-
-```nginx
-underscores_in_headers on;
-```
-
-Nginx drops headers containing underscores by default (e.g. `session_id`), which breaks sticky session routing in multi-account setups.
-
----
-
-## Deployment
-
-### Method 1: Script Installation (Recommended)
-
-One-click installation script that downloads pre-built binaries from GitHub Releases.
-
-#### Prerequisites
-
-- Linux server (amd64 or arm64)
-- PostgreSQL 15+ (installed and running)
-- Redis 7+ (installed and running)
-- Root privileges
-
-#### Installation Steps
+This is the simplest local setup for this branch.
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash
+make openai-routing-deps-up
+make openai-routing-provision-local
+make openai-routing-service-local
 ```
 
-The script will:
-1. Detect your system architecture
-2. Download the latest release
-3. Install binary to `/opt/sub2api`
-4. Create systemd service
-5. Configure system user and permissions
-
-#### Post-Installation
+Health check:
 
 ```bash
-# 1. Start the service
-sudo systemctl start sub2api
-
-# 2. Enable auto-start on boot
-sudo systemctl enable sub2api
-
-# 3. Open Setup Wizard in browser
-# http://YOUR_SERVER_IP:8080
+make openai-routing-healthcheck
 ```
 
-The Setup Wizard will guide you through:
-- Database configuration
-- Redis configuration
-- Admin account creation
-
-#### Upgrade
-
-You can upgrade directly from the **Admin Dashboard** by clicking the **Check for Updates** button in the top-left corner.
-
-The web interface will:
-- Check for new versions automatically
-- Download and apply updates with one click
-- Support rollback if needed
-
-#### Useful Commands
+UI mode with embedded frontend:
 
 ```bash
-# Check status
-sudo systemctl status sub2api
-
-# View logs
-sudo journalctl -u sub2api -f
-
-# Restart service
-sudo systemctl restart sub2api
-
-# Uninstall
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
+make openai-routing-ui-local
 ```
 
----
+### Option B: Linux Non-Containerized Service Startup
 
-### Method 2: Docker Compose (Recommended)
+Use this when PostgreSQL and Redis are already running outside Docker.
 
-Deploy with Docker Compose, including PostgreSQL and Redis containers.
-
-#### Prerequisites
-
-- Docker 20.10+
-- Docker Compose v2+
-
-#### Quick Start (One-Click Deployment)
-
-Use the automated deployment script for easy setup:
+Minimum environment:
 
 ```bash
-# Create deployment directory
-mkdir -p sub2api-deploy && cd sub2api-deploy
+export DATABASE_HOST=127.0.0.1
+export DATABASE_PORT=5432
+export DATABASE_USER=postgres
+export DATABASE_PASSWORD=postgres
+export DATABASE_DBNAME=sub2api
+export DATABASE_SSLMODE=disable
 
-# Download and run deployment preparation script
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh | bash
+export REDIS_HOST=127.0.0.1
+export REDIS_PORT=6379
+export REDIS_PASSWORD=
+export REDIS_DB=0
 
-# Start services
-docker compose up -d
+export SERVER_HOST=0.0.0.0
+export SERVER_PORT=8080
+export SERVER_MODE=debug
+export LOG_LEVEL=debug
 
-# View logs
-docker compose logs -f sub2api
+export JWT_SECRET="$(openssl rand -hex 32)"
+export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+
+export OPENAI_COMPAT_SERVICE_ENABLED=true
+export OPENAI_COMPAT_SERVICE_AUTH_MODE=api_key
+export OPENAI_COMPAT_SERVICE_PATH_PREFIX=/openai-routing
+export OPENAI_COMPAT_SERVICE_DEFAULT_REASONING_EFFORT=low
 ```
 
-**What the script does:**
-- Downloads `docker-compose.local.yml` (saved as `docker-compose.yml`) and `.env.example`
-- Generates secure credentials (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
-- Creates `.env` file with auto-generated secrets
-- Creates data directories (uses local directories for easy backup/migration)
-- Displays generated credentials for your reference
-
-#### Manual Deployment
-
-If you prefer manual setup:
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Wei-Shaw/sub2api.git
-cd sub2api/deploy
-
-# 2. Copy environment configuration
-cp .env.example .env
-
-# 3. Edit configuration (generate secure passwords)
-nano .env
-```
-
-**Required configuration in `.env`:**
-
-```bash
-# PostgreSQL password (REQUIRED)
-POSTGRES_PASSWORD=your_secure_password_here
-
-# JWT Secret (RECOMMENDED - keeps users logged in after restart)
-JWT_SECRET=your_jwt_secret_here
-
-# TOTP Encryption Key (RECOMMENDED - preserves 2FA after restart)
-TOTP_ENCRYPTION_KEY=your_totp_key_here
-
-# Optional: Admin account
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=your_admin_password
-
-# Optional: Custom port
-SERVER_PORT=8080
-```
-
-**Generate secure secrets:**
-```bash
-# Generate JWT_SECRET
-openssl rand -hex 32
-
-# Generate TOTP_ENCRYPTION_KEY
-openssl rand -hex 32
-
-# Generate POSTGRES_PASSWORD
-openssl rand -hex 32
-```
-
-```bash
-# 4. Create data directories (for local version)
-mkdir -p data postgres_data redis_data
-
-# 5. Start all services
-# Option A: Local directory version (recommended - easy migration)
-docker compose -f docker-compose.local.yml up -d
-
-# Option B: Named volumes version (simple setup)
-docker compose up -d
-
-# 6. Check status
-docker compose -f docker-compose.local.yml ps
-
-# 7. View logs
-docker compose -f docker-compose.local.yml logs -f sub2api
-```
-
-#### Deployment Versions
-
-| Version | Data Storage | Migration | Best For |
-|---------|-------------|-----------|----------|
-| **docker-compose.local.yml** | Local directories | ✅ Easy (tar entire directory) | Production, frequent backups |
-| **docker-compose.yml** | Named volumes | ⚠️ Requires docker commands | Simple setup |
-
-**Recommendation:** Use `docker-compose.local.yml` (deployed by script) for easier data management.
-
-#### Access
-
-Open `http://YOUR_SERVER_IP:8080` in your browser.
-
-If admin password was auto-generated, find it in logs:
-```bash
-docker compose -f docker-compose.local.yml logs sub2api | grep "admin password"
-```
-
-#### Upgrade
-
-```bash
-# Pull latest image and recreate container
-docker compose -f docker-compose.local.yml pull
-docker compose -f docker-compose.local.yml up -d
-```
-
-#### Easy Migration (Local Directory Version)
-
-When using `docker-compose.local.yml`, migrate to a new server easily:
-
-```bash
-# On source server
-docker compose -f docker-compose.local.yml down
-cd ..
-tar czf sub2api-complete.tar.gz sub2api-deploy/
-
-# Transfer to new server
-scp sub2api-complete.tar.gz user@new-server:/path/
-
-# On new server
-tar xzf sub2api-complete.tar.gz
-cd sub2api-deploy/
-docker compose -f docker-compose.local.yml up -d
-```
-
-#### Useful Commands
-
-```bash
-# Stop all services
-docker compose -f docker-compose.local.yml down
-
-# Restart
-docker compose -f docker-compose.local.yml restart
-
-# View all logs
-docker compose -f docker-compose.local.yml logs -f
-
-# Remove all data (caution!)
-docker compose -f docker-compose.local.yml down
-rm -rf data/ postgres_data/ redis_data/
-```
-
----
-
-### Method 3: Build from Source
-
-Build and run from source code for development or customization.
-
-#### Prerequisites
-
-- Go 1.21+
-- Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
-
-#### Build Steps
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Wei-Shaw/sub2api.git
-cd sub2api
-
-# 2. Install pnpm (if not already installed)
-npm install -g pnpm
-
-# 3. Build frontend
-cd frontend
-pnpm install
-pnpm run build
-# Output will be in ../backend/internal/web/dist/
-
-# 4. Build backend with embedded frontend
-cd ../backend
-go build -tags embed -o sub2api ./cmd/server
-
-# 5. Create configuration file
-cp ../deploy/config.example.yaml ./config.yaml
-
-# 6. Edit configuration
-nano config.yaml
-```
-
-> **Note:** The `-tags embed` flag embeds the frontend into the binary. Without this flag, the binary will not serve the frontend UI.
-
-**Key configuration in `config.yaml`:**
-
-```yaml
-server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "release"
-
-database:
-  host: "localhost"
-  port: 5432
-  user: "postgres"
-  password: "your_password"
-  dbname: "sub2api"
-
-redis:
-  host: "localhost"
-  port: 6379
-  password: ""
-
-jwt:
-  secret: "change-this-to-a-secure-random-string"
-  expire_hour: 24
-
-default:
-  user_concurrency: 5
-  user_balance: 0
-  api_key_prefix: "sk-"
-  rate_multiplier: 1.0
-```
-
-### Sora Status (Temporarily Unavailable)
-
-> ⚠️ Sora-related features are temporarily unavailable due to technical issues in upstream integration and media delivery.
-> Please do not rely on Sora in production at this time.
-> Existing `gateway.sora_*` configuration keys are reserved and may not take effect until these issues are resolved.
-
-Additional security-related options are available in `config.yaml`:
-
-- `cors.allowed_origins` for CORS allowlist
-- `security.url_allowlist` for upstream/pricing/CRS host allowlists
-- `security.url_allowlist.enabled` to disable URL validation (use with caution)
-- `security.url_allowlist.allow_insecure_http` to allow HTTP URLs when validation is disabled
-- `security.url_allowlist.allow_private_hosts` to allow private/local IP addresses
-- `security.response_headers.enabled` to enable configurable response header filtering (disabled uses default allowlist)
-- `security.csp` to control Content-Security-Policy headers
-- `billing.circuit_breaker` to fail closed on billing errors
-- `server.trusted_proxies` to enable X-Forwarded-For parsing
-- `turnstile.required` to require Turnstile in release mode
-
-**⚠️ Security Warning: HTTP URL Configuration**
-
-When `security.url_allowlist.enabled=false`, the system performs minimal URL validation by default, **rejecting HTTP URLs** and only allowing HTTPS. To allow HTTP URLs (e.g., for development or internal testing), you must explicitly set:
-
-```yaml
-security:
-  url_allowlist:
-    enabled: false                # Disable allowlist checks
-    allow_insecure_http: true     # Allow HTTP URLs (⚠️ INSECURE)
-```
-
-**Or via environment variable:**
-
-```bash
-SECURITY_URL_ALLOWLIST_ENABLED=false
-SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=true
-```
-
-**Risks of allowing HTTP:**
-- API keys and data transmitted in **plaintext** (vulnerable to interception)
-- Susceptible to **man-in-the-middle (MITM) attacks**
-- **NOT suitable for production** environments
-
-**When to use HTTP:**
-- ✅ Development/testing with local servers (http://localhost)
-- ✅ Internal networks with trusted endpoints
-- ✅ Testing account connectivity before obtaining HTTPS
-- ❌ Production environments (use HTTPS only)
-
-**Example error without this setting:**
-```
-Invalid base URL: invalid url scheme: http
-```
-
-If you disable URL validation or response header filtering, harden your network layer:
-- Enforce an egress allowlist for upstream domains/IPs
-- Block private/loopback/link-local ranges
-- Enforce TLS-only outbound traffic
-- Strip sensitive upstream response headers at the proxy
-
-```bash
-# 6. Run the application
-./sub2api
-```
-
-#### Development Mode
-
-```bash
-# Backend (with hot reload)
-cd backend
-go run ./cmd/server
-
-# Frontend (with hot reload)
-cd frontend
-pnpm run dev
-```
-
-#### Code Generation
-
-When editing `backend/ent/schema`, regenerate Ent + Wire:
+Foreground run with logs:
 
 ```bash
 cd backend
-go generate ./ent
-go generate ./cmd/server
+go run ./cmd/server 2>&1 | tee /tmp/sub2api-routing-service.log
 ```
 
----
-
-## Simple Mode
-
-Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
-
-- Enable: Set environment variable `RUN_MODE=simple`
-- Difference: Hides SaaS-related features and skips billing process
-- Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
-
----
-
-## Antigravity Support
-
-Sub2API supports [Antigravity](https://antigravity.so/) accounts. After authorization, dedicated endpoints are available for Claude and Gemini models.
-
-### Dedicated Endpoints
-
-| Endpoint | Model |
-|----------|-------|
-| `/antigravity/v1/messages` | Claude models |
-| `/antigravity/v1beta/` | Gemini models |
-
-### Claude Code Configuration
+Background run with logs on Linux:
 
 ```bash
-export ANTHROPIC_BASE_URL="http://localhost:8080/antigravity"
-export ANTHROPIC_AUTH_TOKEN="sk-xxx"
+cd backend
+nohup go run ./cmd/server > /tmp/sub2api-routing-service.log 2>&1 &
+tail -f /tmp/sub2api-routing-service.log
 ```
 
-### Hybrid Scheduling Mode
+Embedded UI build plus Linux startup:
 
-Antigravity accounts support optional **hybrid scheduling**. When enabled, the general endpoints `/v1/messages` and `/v1beta/` will also route requests to Antigravity accounts.
-
-> **⚠️ Warning**: Anthropic Claude and Antigravity Claude **cannot be mixed within the same conversation context**. Use groups to isolate them properly.
-
-### Known Issues
-
-In Claude Code, Plan Mode cannot exit automatically. (Normally when using the native Claude API, after planning is complete, Claude Code will pop up options for users to approve or reject the plan.)
-
-**Workaround**: Press `Shift + Tab` to manually exit Plan Mode, then type your response to approve or reject the plan.
-
----
-
-## Project Structure
-
-```
-sub2api/
-├── backend/                  # Go backend service
-│   ├── cmd/server/           # Application entry
-│   ├── internal/             # Internal modules
-│   │   ├── config/           # Configuration
-│   │   ├── model/            # Data models
-│   │   ├── service/          # Business logic
-│   │   ├── handler/          # HTTP handlers
-│   │   └── gateway/          # API gateway core
-│   └── resources/            # Static resources
-│
-├── frontend/                 # Vue 3 frontend
-│   └── src/
-│       ├── api/              # API calls
-│       ├── stores/           # State management
-│       ├── views/            # Page components
-│       └── components/       # Reusable components
-│
-└── deploy/                   # Deployment files
-    ├── docker-compose.yml    # Docker Compose configuration
-    ├── .env.example          # Environment variables for Docker Compose
-    ├── config.example.yaml   # Full config file for binary deployment
-    └── install.sh            # One-click installation script
+```bash
+make openai-routing-ui-build
+cd backend
+go run -tags embed ./cmd/server 2>&1 | tee /tmp/sub2api-routing-ui.log
 ```
 
-## Disclaimer
+Health check after startup:
 
-> **Please read carefully before using this project:**
->
-> :rotating_light: **Terms of Service Risk**: Using this project may violate Anthropic's Terms of Service. Please read Anthropic's user agreement carefully before use. All risks arising from the use of this project are borne solely by the user.
->
-> :book: **Disclaimer**: This project is for technical learning and research purposes only. The author assumes no responsibility for account suspension, service interruption, or any other losses caused by the use of this project.
+```bash
+curl -s http://127.0.0.1:8080/openai-routing/healthz
+```
 
----
+## Local Smoke Tests
 
-## Star History
+Text:
 
-<a href="https://star-history.com/#Wei-Shaw/sub2api&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
- </picture>
-</a>
+```bash
+curl -s http://127.0.0.1:8080/openai-routing/v1/responses \
+  -H "Authorization: Bearer $OPENAI_ROUTING_UI_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model":"gpt-5.4",
+    "stream":false,
+    "input":[
+      {
+        "type":"message",
+        "role":"user",
+        "content":[
+          {"type":"input_text","text":"Reply with exactly local-ok"}
+        ]
+      }
+    ]
+  }'
+```
 
----
+Image generation through Responses:
 
-## License
+```bash
+curl -s http://127.0.0.1:8080/openai-routing/v1/responses \
+  -H "Authorization: Bearer $OPENAI_ROUTING_UI_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model":"gpt-5.4-mini",
+    "stream":false,
+    "input":[
+      {
+        "type":"message",
+        "role":"user",
+        "content":[
+          {"type":"input_text","text":"A minimal red square centered on a white background."}
+        ]
+      }
+    ],
+    "tool_choice":{"type":"image_generation"},
+    "tools":[
+      {
+        "type":"image_generation",
+        "model":"gpt-image-2",
+        "size":"1024x1024",
+        "output_format":"png"
+      }
+    ]
+  }'
+```
 
-MIT License
+Or use the helper script:
 
----
+```bash
+API_HOST='http://127.0.0.1:8080' \
+SUB2API_API_KEY="$OPENAI_ROUTING_UI_API_KEY" \
+PROMPT='A minimal red square centered on a white background.' \
+/tmp/run_openai_responses_image_generation.sh
+```
 
-<div align="center">
+## Required Validation
 
-**If you find this project useful, please give it a star!**
+Minimum checks before considering this branch healthy after meaningful changes:
 
-</div>
+```bash
+python3 -m py_compile \
+  tools/openai_routing_loadtest_dev.py \
+  tools/openai_routing_loadtest_runner.py \
+  tools/openai_routing_loadtest_tui.py \
+  tools/litellm_backup_azure_ttft.py \
+  tools/openai_routing_local_e2e.py \
+  tools/openai_responses_image_demo.py
+```
+
+```bash
+cd backend
+GOCACHE=/tmp/sub2api-go-cache go test ./internal/service ./internal/handler ./internal/server/routes -count=1
+GOCACHE=/tmp/sub2api-go-cache go test ./cmd/openai-oauth-client -count=1
+```
+
+## Required Local Current-Branch E2E
+
+A release rebase on this branch is not considered complete until the current
+local branch is started and these local E2E checks pass against
+`http://127.0.0.1:8080/openai-routing/v1/responses`:
+
+- `gpt-5.2`
+- `gpt-5.3`
+- `gpt-5.4`
+- `gpt-5.5`
+- `gpt-image-2` through `/openai-routing/v1/responses`
+
+And against `http://127.0.0.1:8080/openai-routing/v1/embeddings`:
+
+- `text-embedding-3-small` or another OpenAI-compatible embeddings model
+
+Helper:
+
+```bash
+set -a; . ./.openai-routing-service/dev.env; set +a
+python3 tools/openai_routing_local_e2e.py \
+  --api-key "$OPENAI_COMPAT_SERVICE_API_KEY" \
+  --report-file /tmp/openai-routing-local-e2e.json
+```
+
+Public dev is a post-image-deploy regression target, not the source of truth
+for validating an unpushed local rebase:
+
+- `https://dev-sub2api.frai.pro`
+
+## Release Rebase Notes
+
+When syncing this branch to a newer upstream release:
+
+- Rebase onto the release tag first.
+- Prefer upstream implementations if the release absorbed an equivalent helper.
+- Remove duplicate branch-only helpers instead of keeping two competing code paths.
+- Expect route test constructor drift and mock interface drift after release syncs.
+- Push rewritten history to `private` with `--force-with-lease`.
+
+See:
+
+- `docs/CHANGELOG_OPENAI_ROUTING_V0117_REBASE.md`
+- `AGENTS.md`
+
+## Image Build / Push
+
+Build locally:
+
+```bash
+make routing-service-image-build
+```
+
+Push to ECR:
+
+```bash
+make routing-service-image-push
+```
+
+The push helper currently publishes to:
+
+- `507254053937.dkr.ecr.us-west-2.amazonaws.com/finalroundai/sub2api-openai-routing-service`
+
+## Branch Remote Rules
+
+This branch is maintained on:
+
+- `private -> https://github.com/joeeeeey/sub2api-openai-routing-service.git`
+
+Do not push this branch to `origin` unless explicitly asked.
+
+Typical push:
+
+```bash
+git push private HEAD:feature/openai-routing-service-mvp
+```
+
+After a rebase:
+
+```bash
+git push --force-with-lease private HEAD:feature/openai-routing-service-mvp
+```

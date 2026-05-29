@@ -74,6 +74,16 @@ func (Group) Fields() []ent.Field {
 			Default(30),
 
 		// 图片生成计费配置（antigravity 和 gemini 平台使用）
+		field.Bool("allow_image_generation").
+			Default(false).
+			Comment("是否允许该分组使用图片生成能力"),
+		field.Bool("image_rate_independent").
+			Default(false).
+			Comment("图片生成是否使用独立倍率；false 表示共享分组有效倍率"),
+		field.Float("image_rate_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("图片生成独立倍率，仅 image_rate_independent=true 时生效"),
 		field.Float("image_price_1k").
 			Optional().
 			Nillable().
@@ -86,28 +96,6 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-
-		// Sora 按次计费配置（阶段 1）
-		field.Float("sora_image_price_360").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-		field.Float("sora_image_price_540").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-		field.Float("sora_video_price_per_request").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-		field.Float("sora_video_price_per_request_hd").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-
-		// Sora 存储配额
-		field.Int64("sora_storage_quota_bytes").
-			Default(0),
 
 		// Claude Code 客户端限制 (added by migration 029)
 		field.Bool("claude_code_only").
@@ -153,10 +141,29 @@ func (Group) Fields() []ent.Field {
 		field.Bool("allow_messages_dispatch").
 			Default(false).
 			Comment("是否允许 /v1/messages 调度到此 OpenAI 分组"),
+		field.Bool("require_oauth_only").
+			Default(false).
+			Comment("仅允许非 apikey 类型账号关联到此分组"),
+		field.Bool("require_privacy_set").
+			Default(false).
+			Comment("调度时仅允许 privacy 已成功设置的账号"),
 		field.String("default_mapped_model").
 			MaxLen(100).
 			Default("").
 			Comment("默认映射模型 ID，当账号级映射找不到时使用此值"),
+		field.JSON("messages_dispatch_model_config", domain.OpenAIMessagesDispatchModelConfig{}).
+			Default(domain.OpenAIMessagesDispatchModelConfig{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("OpenAI Messages 调度模型配置：按 Claude 系列/精确模型映射到目标 GPT 模型"),
+		field.JSON("models_list_config", domain.GroupModelsListConfig{}).
+			Default(domain.GroupModelsListConfig{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("自定义 /v1/models 展示列表配置；仅影响模型列表响应，不影响调度"),
+
+		// 分组级每分钟请求数上限（0 = 不限制）。设置后优先于用户级兜底生效。
+		field.Int("rpm_limit").
+			Default(0).
+			Comment("分组 RPM 上限，0 表示不限制；设置后接管该分组用户的限流"),
 	}
 }
 

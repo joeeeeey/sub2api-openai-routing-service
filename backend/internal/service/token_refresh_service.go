@@ -27,13 +27,15 @@ type TokenRefreshService struct {
 	schedulerCache   SchedulerCache   // 用于同步更新调度器缓存，解决 token 刷新后缓存不一致问题
 	tempUnschedCache TempUnschedCache // 用于清除 Redis 中的临时不可调度缓存
 	refreshAPI       *OAuthRefreshAPI // 统一刷新 API
+	runtimeBlocker   AccountRuntimeBlocker
 
 	// OpenAI privacy: 刷新成功后检查并设置 training opt-out
 	privacyClientFactory PrivacyClientFactory
 	proxyRepo            ProxyRepository
 
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
 }
 
 // NewTokenRefreshService 创建token刷新服务
@@ -59,7 +61,6 @@ func NewTokenRefreshService(
 	}
 
 	openAIRefresher := NewOpenAITokenRefresher(openaiOAuthService, accountRepo)
-	openAIRefresher.SetSyncLinkedSoraAccounts(cfg.TokenRefresh.SyncLinkedSoraAccounts)
 
 	claudeRefresher := NewClaudeTokenRefresher(oauthService)
 	geminiRefresher := NewGeminiTokenRefresher(geminiOAuthService)
@@ -84,18 +85,6 @@ func NewTokenRefreshService(
 	return s
 }
 
-// SetSoraAccountRepo 设置 Sora 账号扩展表仓储
-// 用于在 OpenAI Token 刷新时同步更新 sora_accounts 表
-// 需要在 Start() 之前调用
-func (s *TokenRefreshService) SetSoraAccountRepo(repo SoraAccountRepository) {
-	// 将 soraAccountRepo 注入到 OpenAITokenRefresher
-	for _, refresher := range s.refreshers {
-		if openaiRefresher, ok := refresher.(*OpenAITokenRefresher); ok {
-			openaiRefresher.SetSoraAccountRepo(repo)
-		}
-	}
-}
-
 // SetPrivacyDeps 注入 OpenAI privacy opt-out 所需依赖
 func (s *TokenRefreshService) SetPrivacyDeps(factory PrivacyClientFactory, proxyRepo ProxyRepository) {
 	s.privacyClientFactory = factory
@@ -110,6 +99,24 @@ func (s *TokenRefreshService) SetRefreshAPI(api *OAuthRefreshAPI) {
 // SetRefreshPolicy 注入后台刷新调用侧策略（用于显式化平台/场景差异行为）。
 func (s *TokenRefreshService) SetRefreshPolicy(policy BackgroundRefreshPolicy) {
 	s.refreshPolicy = policy
+}
+
+func (s *TokenRefreshService) SetAccountRuntimeBlocker(blocker AccountRuntimeBlocker) {
+	s.runtimeBlocker = blocker
+}
+
+func (s *TokenRefreshService) notifyAccountSchedulingBlocked(account *Account, until time.Time, reason string) {
+	if s == nil || s.runtimeBlocker == nil || account == nil {
+		return
+	}
+	s.runtimeBlocker.BlockAccountScheduling(account, until, reason)
+}
+
+func (s *TokenRefreshService) notifyAccountSchedulingBlockCleared(accountID int64) {
+	if s == nil || s.runtimeBlocker == nil || accountID <= 0 {
+		return
+	}
+	s.runtimeBlocker.ClearAccountSchedulingBlock(accountID)
 }
 
 // Start 启动后台刷新服务
@@ -128,9 +135,11 @@ func (s *TokenRefreshService) Start() {
 	)
 }
 
-// Stop 停止刷新服务
+// Stop 停止刷新服务（可安全多次调用）
 func (s *TokenRefreshService) Stop() {
-	close(s.stopCh)
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 	s.wg.Wait()
 	slog.Info("token_refresh.service_stopped")
 }
@@ -294,12 +303,16 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 		// 不可重试错误（invalid_grant/invalid_client 等）直接标记 error 状态并返回
 		if isNonRetryableRefreshError(err) {
 			errorMsg := fmt.Sprintf("Token refresh failed (non-retryable): %v", err)
+			s.notifyAccountSchedulingBlocked(account, time.Time{}, "token_refresh_non_retryable")
 			if setErr := s.accountRepo.SetError(ctx, account.ID, errorMsg); setErr != nil {
 				slog.Error("token_refresh.set_error_status_failed",
 					"account_id", account.ID,
 					"error", setErr,
 				)
 			}
+			// 刷新失败但 access_token 可能仍有效，尝试设置隐私
+			s.ensureOpenAIPrivacy(ctx, account)
+			s.ensureAntigravityPrivacy(ctx, account)
 			return err
 		}
 
@@ -327,9 +340,14 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 		"error", lastErr,
 	)
 
+	// 刷新失败但 access_token 可能仍有效，尝试设置隐私
+	s.ensureOpenAIPrivacy(ctx, account)
+	s.ensureAntigravityPrivacy(ctx, account)
+
 	// 设置临时不可调度 10 分钟（不标记 error，保持 status=active 让下个刷新周期能继续尝试）
 	until := time.Now().Add(tokenRefreshTempUnschedDuration)
 	reason := fmt.Sprintf("token refresh retry exhausted: %v", lastErr)
+	s.notifyAccountSchedulingBlocked(account, until, "token_refresh_retry_exhausted")
 	if setErr := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, reason); setErr != nil {
 		slog.Warn("token_refresh.set_temp_unschedulable_failed",
 			"account_id", account.ID,
@@ -358,6 +376,7 @@ func (s *TokenRefreshService) postRefreshActions(ctx context.Context, account *A
 			)
 		} else {
 			slog.Info("token_refresh.cleared_missing_project_id_error", "account_id", account.ID)
+			s.notifyAccountSchedulingBlockCleared(account.ID)
 		}
 	}
 	// 刷新成功后清除临时不可调度状态（处理 OAuth 401 恢复场景）
@@ -369,6 +388,7 @@ func (s *TokenRefreshService) postRefreshActions(ctx context.Context, account *A
 			)
 		} else {
 			slog.Info("token_refresh.cleared_temp_unschedulable", "account_id", account.ID)
+			s.notifyAccountSchedulingBlockCleared(account.ID)
 		}
 		// 同步清除 Redis 缓存，避免调度器读到过期的临时不可调度状态
 		if s.tempUnschedCache != nil {
@@ -404,6 +424,8 @@ func (s *TokenRefreshService) postRefreshActions(ctx context.Context, account *A
 	}
 	// OpenAI OAuth: 刷新成功后，检查是否已设置 privacy_mode，未设置则尝试关闭训练数据共享
 	s.ensureOpenAIPrivacy(ctx, account)
+	// Antigravity OAuth: 刷新成功后，检查是否已设置 privacy_mode，未设置则调用 setUserSettings
+	s.ensureAntigravityPrivacy(ctx, account)
 }
 
 // errRefreshSkipped 表示刷新被跳过（锁竞争或已被其他路径刷新），不计入 failed 或 refreshed
@@ -418,11 +440,13 @@ func isNonRetryableRefreshError(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	nonRetryable := []string{
-		"invalid_grant",       // refresh_token 已失效
-		"invalid_client",      // 客户端配置错误
-		"unauthorized_client", // 客户端未授权
-		"access_denied",       // 访问被拒绝
-		"missing_project_id",  // 缺少 project_id
+		"invalid_grant",        // refresh_token 已失效
+		"refresh_token_reused", // OpenAI refresh_token 已被使用，必须重新授权
+		"invalid_client",       // 客户端配置错误
+		"unauthorized_client",  // 客户端未授权
+		"access_denied",        // 访问被拒绝
+		"missing_project_id",   // 缺少 project_id
+		"no refresh token available",
 	}
 	for _, needle := range nonRetryable {
 		if strings.Contains(msg, needle) {
@@ -441,11 +465,8 @@ func (s *TokenRefreshService) ensureOpenAIPrivacy(ctx context.Context, account *
 	if s.privacyClientFactory == nil {
 		return
 	}
-	// 已设置过则跳过
-	if account.Extra != nil {
-		if _, ok := account.Extra["privacy_mode"]; ok {
-			return
-		}
+	if shouldSkipOpenAIPrivacyEnsure(account.Extra) {
+		return
 	}
 
 	token, _ := account.Credentials["access_token"].(string)
@@ -472,6 +493,52 @@ func (s *TokenRefreshService) ensureOpenAIPrivacy(ctx context.Context, account *
 		)
 	} else {
 		slog.Info("token_refresh.privacy_mode_set",
+			"account_id", account.ID,
+			"privacy_mode", mode,
+		)
+	}
+}
+
+// ensureAntigravityPrivacy 后台刷新中检查 Antigravity OAuth 账号隐私状态。
+// 仅当 privacy_mode 已成功设置（"privacy_set"）时跳过；
+// 未设置或之前失败（"privacy_set_failed"）均会重试。
+func (s *TokenRefreshService) ensureAntigravityPrivacy(ctx context.Context, account *Account) {
+	if account.Platform != PlatformAntigravity || account.Type != AccountTypeOAuth {
+		return
+	}
+	if account.Extra != nil {
+		if mode, ok := account.Extra["privacy_mode"].(string); ok && mode == AntigravityPrivacySet {
+			return
+		}
+	}
+
+	token, _ := account.Credentials["access_token"].(string)
+	if token == "" {
+		return
+	}
+
+	projectID, _ := account.Credentials["project_id"].(string)
+
+	var proxyURL string
+	if account.ProxyID != nil && s.proxyRepo != nil {
+		if p, err := s.proxyRepo.GetByID(ctx, *account.ProxyID); err == nil && p != nil {
+			proxyURL = p.URL()
+		}
+	}
+
+	mode := setAntigravityPrivacy(ctx, token, projectID, proxyURL)
+	if mode == "" {
+		return
+	}
+
+	if err := s.accountRepo.UpdateExtra(ctx, account.ID, map[string]any{"privacy_mode": mode}); err != nil {
+		slog.Warn("token_refresh.update_antigravity_privacy_mode_failed",
+			"account_id", account.ID,
+			"error", err,
+		)
+	} else {
+		applyAntigravityPrivacyMode(account, mode)
+		slog.Info("token_refresh.antigravity_privacy_mode_set",
 			"account_id", account.ID,
 			"privacy_mode", mode,
 		)

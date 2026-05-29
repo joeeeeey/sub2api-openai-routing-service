@@ -614,6 +614,7 @@ func (s *AntigravityGatewayService) antigravityRetryLoop(p antigravityRetryLoopP
 urlFallbackLoop:
 	for urlIdx, baseURL := range availableURLs {
 		usedBaseURL = baseURL
+		allAttemptsInternal500 := true // 追踪本轮所有 attempt 是否全部命中 INTERNAL 500
 		for attempt := 1; attempt <= antigravityMaxRetries; attempt++ {
 			select {
 			case <-p.ctx.Done():
@@ -625,11 +626,6 @@ urlFallbackLoop:
 			upstreamReq, err := antigravity.NewAPIRequestWithURL(p.ctx, baseURL, p.action, p.accessToken, p.body)
 			if err != nil {
 				return nil, err
-			}
-
-			// Capture upstream request body for ops retry of this attempt.
-			if p.c != nil && len(p.body) > 0 {
-				p.c.Set(OpsUpstreamRequestBodyKey, string(p.body))
 			}
 
 			resp, err = p.httpUpstream.Do(upstreamReq, p.proxyURL, p.account.ID, p.account.Concurrency)
@@ -766,8 +762,17 @@ urlFallbackLoop:
 							logger.LegacyPrintf("service.antigravity_gateway", "%s status=context_canceled_during_backoff", p.prefix)
 							return nil, p.ctx.Err()
 						}
+						// 追踪 INTERNAL 500：非匹配的 attempt 清除标记
+						if !isAntigravityInternalServerError(resp.StatusCode, respBody) {
+							allAttemptsInternal500 = false
+						}
 						continue
 					}
+				}
+
+				// INTERNAL 500 渐进惩罚：3 次重试全部命中特定 500 时递增计数器并惩罚
+				if allAttemptsInternal500 && isAntigravityInternalServerError(resp.StatusCode, respBody) {
+					s.handleInternal500RetryExhausted(p.ctx, p.prefix, p.account)
 				}
 
 				// 其他 4xx 错误或重试用尽，直接返回
@@ -786,6 +791,11 @@ urlFallbackLoop:
 
 	if resp != nil && resp.StatusCode < 400 && usedBaseURL != "" {
 		antigravity.DefaultURLAvailability.MarkSuccess(usedBaseURL)
+	}
+
+	// 成功响应时清零 INTERNAL 500 连续失败计数器（覆盖所有成功路径，含 smart retry）
+	if resp != nil && resp.StatusCode < 400 {
+		s.resetInternal500Counter(p.ctx, p.prefix, p.account.ID)
 	}
 
 	return &antigravityRetryLoopResult{resp: resp}, nil
@@ -862,6 +872,7 @@ type AntigravityGatewayService struct {
 	settingService    *SettingService
 	cache             GatewayCache // 用于模型级限流时清除粘性会话绑定
 	schedulerSnapshot *SchedulerSnapshotService
+	internal500Cache  Internal500CounterCache // INTERNAL 500 渐进惩罚计数器
 }
 
 func NewAntigravityGatewayService(
@@ -872,6 +883,7 @@ func NewAntigravityGatewayService(
 	rateLimitService *RateLimitService,
 	httpUpstream HTTPUpstream,
 	settingService *SettingService,
+	internal500Cache Internal500CounterCache,
 ) *AntigravityGatewayService {
 	return &AntigravityGatewayService{
 		accountRepo:       accountRepo,
@@ -881,6 +893,7 @@ func NewAntigravityGatewayService(
 		settingService:    settingService,
 		cache:             cache,
 		schedulerSnapshot: schedulerSnapshot,
+		internal500Cache:  internal500Cache,
 	}
 }
 
@@ -1299,22 +1312,6 @@ func (s *AntigravityGatewayService) unwrapV1InternalResponse(body []byte) ([]byt
 	return body, nil
 }
 
-// isModelNotFoundError 检测是否为模型不存在的 404 错误
-func isModelNotFoundError(statusCode int, body []byte) bool {
-	if statusCode != 404 {
-		return false
-	}
-
-	bodyStr := strings.ToLower(string(body))
-	keywords := []string{"model not found", "unknown model", "not found"}
-	for _, keyword := range keywords {
-		if strings.Contains(bodyStr, keyword) {
-			return true
-		}
-	}
-	return true // 404 without specific message also treated as model not found
-}
-
 // Forward 转发 Claude 协议请求（Claude → Gemini 转换）
 //
 // 限流处理流程:
@@ -1349,6 +1346,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	originalModel := claudeReq.Model
 	mappedModel := s.getMappedModel(account, claudeReq.Model)
 	if mappedModel == "" {
+		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
 		return nil, s.writeClaudeError(c, http.StatusForbidden, "permission_error", fmt.Sprintf("model %s not in whitelist", claudeReq.Model))
 	}
 	// 应用 thinking 模式自动后缀：如果 thinking 开启且目标是 claude-sonnet-4-5，自动改为 thinking 版本
@@ -2076,7 +2074,8 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	}
 
 	// 解析请求以获取 image_size（用于图片计费）
-	imageSize := s.extractImageSize(body)
+	imageInputSize := s.extractImageInputSize(body)
+	imageSize := normalizeOpenAIImageSizeTier(imageInputSize)
 
 	switch action {
 	case "generateContent", "streamGenerateContent":
@@ -2098,6 +2097,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 	mappedModel := s.getMappedModel(account, originalModel)
 	if mappedModel == "" {
+		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
 		return nil, s.writeGoogleError(c, http.StatusForbidden, fmt.Sprintf("model %s not in whitelist", originalModel))
 	}
 	billingModel := mappedModel
@@ -2447,6 +2447,7 @@ handleSuccess:
 		ClientDisconnect: clientDisconnect,
 		ImageCount:       imageCount,
 		ImageSize:        imageSize,
+		ImageInputSize:   imageInputSize,
 	}, nil
 }
 
@@ -4045,21 +4046,17 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	}
 }
 
-// extractImageSize 从 Gemini 请求中提取 image_size 参数
-func (s *AntigravityGatewayService) extractImageSize(body []byte) string {
+func (s *AntigravityGatewayService) extractImageInputSize(body []byte) string {
 	var req antigravity.GeminiRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		return "2K" // 默认 2K
+		return ""
 	}
 
 	if req.GenerationConfig != nil && req.GenerationConfig.ImageConfig != nil {
-		size := strings.ToUpper(strings.TrimSpace(req.GenerationConfig.ImageConfig.ImageSize))
-		if size == "1K" || size == "2K" || size == "4K" {
-			return size
-		}
+		return strings.TrimSpace(req.GenerationConfig.ImageConfig.ImageSize)
 	}
 
-	return "2K" // 默认 2K
+	return ""
 }
 
 // isImageGenerationModel 判断模型是否为图片生成模型
@@ -4212,6 +4209,14 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	// 构建上游请求 URL
 	upstreamURL := baseURL + "/v1/messages"
 
+	// 能力维度 sanitize：Anthropic-compatible 上游透传路径也需要保证 body↔beta header
+	// 对称。客户端 anthropic-beta header 不含 context-management-2025-06-27 但 body 带
+	// context_management 时 strip，与 Anthropic 直连 / Bedrock / Vertex 路径保持一致。
+	clientBeta := c.GetHeader("anthropic-beta")
+	if sanitized, changed := sanitizeAnthropicBodyForBetaTokens(body, clientBeta); changed {
+		body = sanitized
+	}
+
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstreamURL, bytes.NewReader(body))
 	if err != nil {
@@ -4227,7 +4232,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	if v := c.GetHeader("anthropic-version"); v != "" {
 		req.Header.Set("anthropic-version", v)
 	}
-	if v := c.GetHeader("anthropic-beta"); v != "" {
+	if v := clientBeta; v != "" {
 		req.Header.Set("anthropic-beta", v)
 	}
 
@@ -4450,6 +4455,14 @@ func (s *AntigravityGatewayService) streamUpstreamResponse(c *gin.Context, resp 
 }
 
 // extractSSEUsage 从 SSE data 行中提取 Claude usage（用于流式透传场景）
+//
+// Anthropic streaming 的 usage 字段分布在两类事件中：
+//   - message_start：嵌套在 event.message.usage（input_tokens、cache_creation_input_tokens、
+//     cache_read_input_tokens 等输入侧字段）
+//   - message_delta：位于顶层 event.usage（流结束时的最终 output_tokens）
+//
+// 仅读取顶层 event.usage 会漏掉 message_start 的输入侧字段，导致流式透传请求落库的
+// usage_logs 记录 input_tokens=0。
 func (s *AntigravityGatewayService) extractSSEUsage(line string, usage *ClaudeUsage) {
 	if !strings.HasPrefix(line, "data: ") {
 		return
@@ -4459,8 +4472,15 @@ func (s *AntigravityGatewayService) extractSSEUsage(line string, usage *ClaudeUs
 	if json.Unmarshal([]byte(dataStr), &event) != nil {
 		return
 	}
-	u, ok := event["usage"].(map[string]any)
-	if !ok {
+	var u map[string]any
+	if eventType, _ := event["type"].(string); eventType == "message_start" {
+		if msg, ok := event["message"].(map[string]any); ok {
+			u, _ = msg["usage"].(map[string]any)
+		}
+	} else {
+		u, _ = event["usage"].(map[string]any)
+	}
+	if u == nil {
 		return
 	}
 	if v, ok := u["input_tokens"].(float64); ok && int(v) > 0 {

@@ -53,6 +53,10 @@ func (UsageLog) Fields() []ent.Field {
 			MaxLen(100).
 			Optional().
 			Nillable(),
+		field.Int64("channel_id").Optional().Nillable().Comment("渠道 ID"),
+		field.String("model_mapping_chain").MaxLen(500).Optional().Nillable().Comment("模型映射链"),
+		field.String("billing_tier").MaxLen(50).Optional().Nillable().Comment("计费层级标签"),
+		field.String("billing_mode").MaxLen(20).Optional().Nillable().Comment("计费模式：token/per_request/image"),
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
@@ -130,12 +134,21 @@ func (UsageLog) Fields() []ent.Field {
 			MaxLen(10).
 			Optional().
 			Nillable(),
-		// 媒体类型字段（sora 使用）
-		field.String("media_type").
+		field.String("image_input_size").
+			MaxLen(32).
+			Optional().
+			Nillable(),
+		field.String("image_output_size").
+			MaxLen(32).
+			Optional().
+			Nillable(),
+		field.String("image_size_source").
 			MaxLen(16).
 			Optional().
 			Nillable(),
-
+		field.JSON("image_size_breakdown", map[string]int{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 		// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
 		field.Bool("cache_ttl_overridden").
 			Default(false),

@@ -10,6 +10,7 @@ import (
 
 	"log/slog"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -42,6 +43,9 @@ type DataProxy struct {
 	Status   string `json:"status"`
 }
 
+// DataAccount 是管理员显式备份导出使用的账号结构，故意不走 dto.Account 的脱敏路径，
+// Credentials 原文返回。这是"管理员备份"这一显式行为的一部分；如未来需要导出脱敏版本，
+// 应新增独立结构而非修改这里。
 type DataAccount struct {
 	Name               string         `json:"name"`
 	Notes              *string        `json:"notes,omitempty"`
@@ -267,6 +271,9 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		}
 	}
 
+	// 收集需要异步设置隐私的 Antigravity OAuth 账号
+	var privacyAccounts []*service.Account
+
 	for i := range dataPayload.Accounts {
 		item := dataPayload.Accounts[i]
 		if err := validateDataAccount(item); err != nil {
@@ -314,7 +321,8 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			SkipDefaultGroupBind: skipDefaultGroupBind,
 		}
 
-		if _, err := h.adminService.CreateAccount(ctx, accountInput); err != nil {
+		created, err := h.adminService.CreateAccount(ctx, accountInput)
+		if err != nil {
 			result.AccountFailed++
 			result.Errors = append(result.Errors, DataImportError{
 				Kind:    "account",
@@ -323,7 +331,28 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			})
 			continue
 		}
+		// 收集 Antigravity OAuth 账号，稍后异步设置隐私
+		if created.Platform == service.PlatformAntigravity && created.Type == service.AccountTypeOAuth {
+			privacyAccounts = append(privacyAccounts, created)
+		}
 		result.AccountCreated++
+	}
+
+	// 异步设置 Antigravity 隐私，避免大量导入时阻塞请求
+	if len(privacyAccounts) > 0 {
+		adminSvc := h.adminService
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("import_antigravity_privacy_panic", "recover", r)
+				}
+			}()
+			bgCtx := context.Background()
+			for _, acc := range privacyAccounts {
+				adminSvc.ForceAntigravityPrivacy(bgCtx, acc)
+			}
+			slog.Info("import_antigravity_privacy_done", "count", len(privacyAccounts))
+		}()
 	}
 
 	return result, nil
@@ -334,7 +363,7 @@ func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, e
 	pageSize := dataPageCap
 	var out []service.Proxy
 	for {
-		items, total, err := h.adminService.ListProxies(ctx, page, pageSize, "", "", "")
+		items, total, err := h.adminService.ListProxies(ctx, page, pageSize, "", "", "", "created_at", "desc")
 		if err != nil {
 			return nil, err
 		}
@@ -347,12 +376,12 @@ func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, e
 	return out, nil
 }
 
-func (h *AccountHandler) listAccountsFiltered(ctx context.Context, platform, accountType, status, search string) ([]service.Account, error) {
+func (h *AccountHandler) listAccountsFiltered(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode, sortBy, sortOrder string) ([]service.Account, error) {
 	page := 1
 	pageSize := dataPageCap
 	var out []service.Account
 	for {
-		items, total, err := h.adminService.ListAccounts(ctx, page, pageSize, platform, accountType, status, search, 0, "")
+		items, total, err := h.adminService.ListAccounts(ctx, page, pageSize, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
 		if err != nil {
 			return nil, err
 		}
@@ -384,11 +413,28 @@ func (h *AccountHandler) resolveExportAccounts(ctx context.Context, ids []int64,
 	platform := c.Query("platform")
 	accountType := c.Query("type")
 	status := c.Query("status")
+	privacyMode := strings.TrimSpace(c.Query("privacy_mode"))
 	search := strings.TrimSpace(c.Query("search"))
+	sortBy := c.DefaultQuery("sort_by", "name")
+	sortOrder := c.DefaultQuery("sort_order", "asc")
 	if len(search) > 100 {
 		search = search[:100]
 	}
-	return h.listAccountsFiltered(ctx, platform, accountType, status, search)
+
+	groupID := int64(0)
+	if groupIDStr := c.Query("group"); groupIDStr != "" {
+		if groupIDStr == accountListGroupUngroupedQueryValue {
+			groupID = service.AccountListGroupUngrouped
+		} else {
+			parsedGroupID, parseErr := strconv.ParseInt(groupIDStr, 10, 64)
+			if parseErr != nil || parsedGroupID <= 0 {
+				return nil, infraerrors.BadRequest("INVALID_GROUP_FILTER", "invalid group filter")
+			}
+			groupID = parsedGroupID
+		}
+	}
+
+	return h.listAccountsFiltered(ctx, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
 }
 
 func (h *AccountHandler) resolveExportProxies(ctx context.Context, accounts []service.Account) ([]service.Proxy, error) {
@@ -542,15 +588,15 @@ func defaultProxyName(name string) string {
 
 // enrichCredentialsFromIDToken performs best-effort extraction of user info fields
 // (email, plan_type, chatgpt_account_id, etc.) from id_token in credentials.
-// Only applies to OpenAI/Sora OAuth accounts. Skips expired token errors silently.
+// Only applies to OpenAI OAuth accounts. Skips expired token errors silently.
 // Existing credential values are never overwritten — only missing fields are filled.
 func enrichCredentialsFromIDToken(item *DataAccount) {
 	if item.Credentials == nil {
 		return
 	}
-	// Only enrich OpenAI/Sora OAuth accounts
+	// Only enrich OpenAI OAuth accounts
 	platform := strings.ToLower(strings.TrimSpace(item.Platform))
-	if platform != service.PlatformOpenAI && platform != service.PlatformSora {
+	if platform != service.PlatformOpenAI {
 		return
 	}
 	if strings.ToLower(strings.TrimSpace(item.Type)) != service.AccountTypeOAuth {
