@@ -290,6 +290,8 @@ The minimum acceptance bar is:
   - `gpt-5.4`
   - `gpt-5.5`
   - `gpt-image-2` via `tools[].type=image_generation`
+- Local current-branch E2E against `http://127.0.0.1:8080/openai-routing/v1/embeddings` for:
+  - an OpenAI-compatible embeddings model such as `text-embedding-3-small`
 
 ### Local Current-Branch E2E Expectations
 
@@ -299,6 +301,7 @@ For this branch, a release rebase should not be treated as complete until the fo
 - `gpt-5.2`, `gpt-5.3`, `gpt-5.4`, and `gpt-5.5` each return the expected assistant text
 - image generation returns `HTTP 200`, `status=completed`, and a non-empty `image_generation_call.result`
 - at least one generated image is decoded and saved locally to verify the payload is a real image, not only JSON-shaped success
+- embeddings returns `HTTP 200`, `object=list`, and at least one non-empty embedding vector
 - Public dev E2E is still required after image build/push/deploy, but it does not validate unpushed local rebase code.
 
 ## Notes For Future Agents

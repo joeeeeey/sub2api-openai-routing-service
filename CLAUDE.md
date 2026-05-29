@@ -122,6 +122,7 @@ Local current-branch E2E that should pass after rebases:
 - `gpt-5.4`
 - `gpt-5.5`
 - `gpt-image-2`
+- `text-embedding-3-small` or another OpenAI-compatible embeddings model through `/openai-routing/v1/embeddings`
 
 Local base URL:
 

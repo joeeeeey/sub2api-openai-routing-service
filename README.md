@@ -258,6 +258,10 @@ local branch is started and these local E2E checks pass against
 - `gpt-5.5`
 - `gpt-image-2` through `/openai-routing/v1/responses`
 
+And against `http://127.0.0.1:8080/openai-routing/v1/embeddings`:
+
+- `text-embedding-3-small` or another OpenAI-compatible embeddings model
+
 Public dev is a post-image-deploy regression target, not the source of truth
 for validating an unpushed local rebase:
 

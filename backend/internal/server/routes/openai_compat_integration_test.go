@@ -235,8 +235,23 @@ func newOpenAICompatTestRouter(t *testing.T, groupPlatform string, upstream *ope
 			"refresh_token":      "refresh-token",
 		},
 	}
+	embeddingsAccount := service.Account{
+		ID:          6002,
+		Name:        "OpenAI APIKey Embeddings Test",
+		Platform:    service.PlatformOpenAI,
+		Type:        service.AccountTypeAPIKey,
+		Status:      service.StatusActive,
+		Schedulable: true,
+		Concurrency: 3,
+		Credentials: map[string]any{
+			"api_key": "sk-upstream",
+			"openai_capabilities": []any{
+				string(service.OpenAIEndpointCapabilityEmbeddings),
+			},
+		},
+	}
 
-	accountRepo := openAICompatTestAccountRepo{accounts: []service.Account{account}}
+	accountRepo := openAICompatTestAccountRepo{accounts: []service.Account{account, embeddingsAccount}}
 	usageRepo := &openAICompatTestUsageLogRepo{}
 	concurrencySvc := service.NewConcurrencyService(openAICompatTestConcurrencyCache{})
 	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
@@ -416,4 +431,39 @@ func TestOpenAICompatResponsesRoute_OmitsReasoningByDefaultAndConvertsStringInpu
 	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning.summary").Exists())
 	require.Equal(t, "user", gjson.GetBytes(upstream.lastBody, "input.0.role").String())
 	require.Equal(t, "hello", gjson.GetBytes(upstream.lastBody, "input.0.content").String())
+}
+
+func TestOpenAICompatEmbeddingsRoute_ForwardsToEmbeddingsEndpoint(t *testing.T) {
+	upstream := &openAICompatTestHTTPUpstream{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+				"x-request-id": []string{"req_embeddings_test"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{
+				"object":"list",
+				"model":"text-embedding-3-small",
+				"data":[{"object":"embedding","index":0,"embedding":[0.1,0.2,0.3]}],
+				"usage":{"prompt_tokens":4,"total_tokens":4}
+			}`)),
+		},
+	}
+	router := newOpenAICompatTestRouter(t, service.PlatformOpenAI, upstream)
+
+	req := httptest.NewRequest(http.MethodPost, "/openai-routing/v1/embeddings", strings.NewReader(`{
+		"model":"text-embedding-3-small",
+		"input":"hello embeddings"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, upstream.lastReq)
+	require.Equal(t, "/v1/embeddings", upstream.lastReq.URL.Path)
+	require.Equal(t, "Bearer sk-upstream", upstream.lastReq.Header.Get("Authorization"))
+	require.Equal(t, "hello embeddings", gjson.GetBytes(upstream.lastBody, "input").String())
+	require.Equal(t, "list", gjson.GetBytes(rec.Body.Bytes(), "object").String())
+	require.Equal(t, 3, len(gjson.GetBytes(rec.Body.Bytes(), "data.0.embedding").Array()))
 }
